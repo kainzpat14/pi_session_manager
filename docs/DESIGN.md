@@ -50,9 +50,10 @@
 1. Page refresh → `instances` Map is empty
 2. User clicks sidebar item
 3. `instances.has(id)` is false → `attachInstance(id)` re-establishes WS
-4. Server sends replay buffer on WS open → terminal has current screen state
-5. Server sends SIGWINCH to pi → TUI redraws → fresh output
-6. PTY was never killed → stream resumes
+4. Frontend calls `term.reset()` to clear stale xterm.js parser state
+5. Server sends replay buffer on WS open. **For reconnects** (>5s old), it prepends terminal init sequences (`smcup`, application cursor keys, wraparound) that pi sent at startup but have fallen out of the 64KB window
+6. Server sends SIGWINCH to pi → TUI redraws → fresh output
+7. PTY was never killed → stream resumes
 
 ### Resume Past Session
 1. Frontend `POST /api/sessions/:id/resume`
@@ -120,10 +121,21 @@ Each `PiInstance` maintains a rolling `replayBuffer` (64KB cap):
 - On new WebSocket connection, send buffer immediately before live streaming
 - This provides instant screen state without waiting for new pi output
 
+### Reconnect Init Sequence
+
+The replay buffer window only captures the most recent 64KB of output. When pi first starts, it sends terminal setup sequences (`smcup`, application cursor keys, wraparound, etc.) that configure the TTY. These sequences are long gone from the replay window.
+
+For reconnects (instances older than 5 seconds), the server **prepends** the critical missing setup sequences to the replay buffer before sending:
+- `\x1b[?1049h` — enter alternate screen (smcup)
+- `\x1b[?1h` — enable application cursor keys
+- `\x1b[?7h` — enable wraparound
+
+Combined with `term.reset()` on the frontend, this ensures xterm.js starts in a clean state that matches what pi's TUI expects.
+
 ## SIGWINCH Redraw
 
 On new WebSocket connect to an existing PTY:
-1. Server sends replay buffer (existing screen state)
+1. Server sends replay buffer (existing screen state, with init sequence prepended for reconnects)
 2. Server calls `process.kill(pid, "SIGWINCH")`
 3. pi's `ProcessTerminal` receives SIGWINCH and triggers full TUI redraw
 4. Redraw output is captured in replay buffer and streamed to the new client

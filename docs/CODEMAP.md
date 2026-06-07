@@ -9,7 +9,7 @@ pi-web/
 ├── README.md              # quick start and usage
 ├── .gitignore             # node_modules, dist, logs
 ├── src/                   # TypeScript backend
-│   ├── server.ts          # entry point: Express + WebSocketServer + replay on connect
+│   ├── server.ts          # entry point: Express + WebSocketServer + replay on connect. For reconnects, prepends terminal init sequences (smcup, app cursor, wraparound) to replay buffer before sending
 │   ├── pty-manager.ts     # PiInstance lifecycle: spawn, kill, attach, resize, replay buffer, SIGWINCH
 │   ├── session-api.ts     # Express router for /api/* endpoints
 │   ├── session-store.ts   # Scan sessions/, read headers, filter external pi processes via /proc
@@ -52,7 +52,7 @@ pi-web/
 | `api(method, path, body)` | `app.js` | Fetch wrapper with X-Pi-Token |
 | `initApp()` | `app.js` | Start polling loops for instances + history |
 | `createInstance(cwd)` | `app.js` | POST /instances then attachInstance |
-| `attachInstance(id, cwd)` | `app.js` | Create WS, xterm.js, pane, tab; server auto-replays + SIGWINCH |
+| `attachInstance(id, cwd)` | `app.js` | Create WS, xterm.js, pane, tab, call `term.reset()`; server auto-replays + SIGWINCH |
 | `removeInstance(id)` | `app.js` | Dispose term, close WS, remove pane/tab |
 | `switchToInstance(id)` | `app.js` | Toggle active pane + tab + sidebar highlight |
 | `resumeSession(id)` | `app.js` | POST /sessions/:id/resume then attach |
@@ -61,6 +61,7 @@ pi-web/
 | `loadFs(path)` | `app.js` | Fetch directory listing and render explorer |
 | `renderFs(data)` | `app.js` | Build DOM: breadcrumb, create button, dir/file entries |
 | `toggleSidebar()` | `app.js` | Inline onclick + event listener for hamburger menu |
+| `term.reset()` | `app.js` | Called in `attachInstance()` before `fitAddon.fit()` to clear stale xterm.js parser state on reconnect |
 
 ## Data Structures
 

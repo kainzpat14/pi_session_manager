@@ -23,6 +23,8 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Server maintains 64KB replay buffer per PTY instance
 - [x] New WebSocket connection replays recent output immediately
 - [x] Server sends SIGWINCH to pi on connect to force TUI redraw
+- [x] For reconnects, server prepends terminal init sequence to replay buffer (smcup, app cursor, wraparound) so xterm.js state matches pi's TUI expectations
+- [x] Frontend calls `term.reset()` before attaching to clear stale xterm.js parser state
 - [x] iOS Safari: aggressive xterm.js re-render on visibilitychange (resize ±1 col, fit, refresh)
 
 ### Session Management
