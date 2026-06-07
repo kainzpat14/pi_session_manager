@@ -19,6 +19,12 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Resize terminal (cols/rows)
 - [x] Multiple concurrent pi instances (tabs)
 
+### Reconnect / Resume
+- [x] Server maintains 64KB replay buffer per PTY instance
+- [x] New WebSocket connection replays recent output immediately
+- [x] Server sends SIGWINCH to pi on connect to force TUI redraw
+- [x] iOS Safari: aggressive xterm.js re-render on visibilitychange (resize ±1 col, fit, refresh)
+
 ### Session Management
 - [x] Create new session in any directory
 - [x] List active running instances
@@ -26,6 +32,7 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Kill running instances
 - [x] List past session history from disk (`~/.pi/agent/sessions/`)
 - [x] Resume past sessions with `--session <path>`
+- [x] Resume preserves original cwd from session JSON header
 - [x] Delete past session files permanently
 
 ### History Display
@@ -35,6 +42,12 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Resume button: ▶ (play icon)
 - [x] Delete button: 🗑 (trash icon)
 - [x] Delete requires confirmation dialog
+
+### History Filtering
+- [x] Hide sessions whose directory has an externally-running pi process
+- [x] Detection: scan `/proc/<pid>/cwd` of all pi processes, exclude pi-web's own pids
+- [x] Do NOT use file modification time for activity detection
+- [x] Filter must not affect pi-web spawned sessions that are truly idle
 
 ### Mobile
 - [x] Collapsible sidebar on mobile (< 768px)
