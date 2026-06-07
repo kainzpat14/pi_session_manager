@@ -57,6 +57,14 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] History action buttons: min 44px height, 48px width on mobile
 - [x] History action buttons: larger touch targets (padding 8px 14px, font 1rem)
 
+### File Explorer
+- [x] Clickable folder navigation in sidebar ("New in folder" section)
+- [x] Breadcrumb with "↑ parent" navigation
+- [x] "+ New session here" button for current directory
+- [x] Directories shown first, sorted alphabetically
+- [x] Manual path input preserved alongside explorer
+- [x] Mobile-friendly: min 44px touch targets, scrollable list
+
 ### Coexistence
 - [x] Telegram bridge continues working alongside web frontend
 - [x] Independent auth, no interference

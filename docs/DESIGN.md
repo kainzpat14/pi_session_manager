@@ -136,6 +136,42 @@ When iOS Safari backgrounds a tab, the canvas may blank. On `visibilitychange` �
 3. `term.refresh(0, rows-1)` — explicit paint call
 4. 100ms delay to let iOS finish canvas wake-up
 
+## File Explorer
+
+### Data Flow
+
+```
+Sidebar "New in folder"
+  │
+  ├── GET /api/fs?path=/home/dev
+  │     └── session-api.ts: reads directory via fs.readdir, stat
+  │         returns { path, parent, entries: [{name, type, path}] }
+  │
+  ├── Frontend: renderFs(data)
+  │     ├── Breadcrumb: "↑ /home/dev" (click → parent)
+  │     ├── "+ New session here" button → createInstance(data.path)
+  │     ├── Directories: clickable → loadFs(entry.path)
+  │     └── Files: non-clickable, gray
+  │
+  └── Manual input row preserved below explorer
+```
+
+### Backend Endpoint
+
+`GET /api/fs?path=<absPath>`
+- Resolves path to absolute
+- `fs.readdir` + `fs.stat` per entry
+- Sorts: directories first, then files, both alphabetically
+- Returns `{ path, parent, entries }` where `parent` is `null` at filesystem root
+
+### Frontend
+
+- `loadFs(path)` fetches and renders asynchronously
+- `renderFs(data)` builds DOM: breadcrumb, create button, entry list
+- `fsCurrentPath` tracks state; synced to manual input field
+- Null-safe: all DOM refs checked before access
+- Click handlers on directories call `loadFs()` recursively
+
 ## Error Handling
 - PTY exit → broadcast to WS clients, clean up instance
 - WS disconnect → remove client from instance, PTY keeps running

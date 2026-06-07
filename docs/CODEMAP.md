@@ -58,6 +58,9 @@ pi-web/
 | `resumeSession(id)` | `app.js` | POST /sessions/:id/resume then attach |
 | `refreshHistory()` | `app.js` | GET /sessions, render history list |
 | `openSidebar()` / `closeSidebar()` | `app.js` | Mobile sidebar toggle |
+| `loadFs(path)` | `app.js` | Fetch directory listing and render explorer |
+| `renderFs(data)` | `app.js` | Build DOM: breadcrumb, create button, dir/file entries |
+| `toggleSidebar()` | `app.js` | Inline onclick + event listener for hamburger menu |
 
 ## Data Structures
 
@@ -104,6 +107,7 @@ instances: Map<string, {
 | GET | `/api/sessions` | token | — | `[SessionEntry[]]` |
 | DELETE | `/api/sessions/:id` | token | — | `{ok}` |
 | POST | `/api/sessions/:id/resume` | token | — | `{id, cwd, pid}` |
+| GET | `/api/fs` | token | `?path=<absPath>` | `{path, parent, entries[]}` |
 | GET | `/config-info` | — | — | `{port, agentDir, configPath}` |
 | WS | `/ws?instance=<id>&token=<t>` | token query | — | bidirectional JSON |
 
