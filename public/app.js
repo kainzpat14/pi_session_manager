@@ -1,6 +1,23 @@
 /** pi-web frontend */
 
 const API_BASE = "";
+
+/* ---------- Visible debug logger (no console access on mobile) ---------- */
+const debugLog = document.getElementById("debug-log");
+function logDebug(msg) {
+  if (!debugLog) return;
+  debugLog.style.display = "block";
+  const line = document.createElement("div");
+  line.textContent = "[" + new Date().toLocaleTimeString() + "] " + msg;
+  debugLog.appendChild(line);
+  debugLog.scrollTop = debugLog.scrollHeight;
+}
+window.onerror = (msg, src, line, col, err) => {
+  logDebug("ERROR: " + msg + " @" + line + ":" + col);
+};
+window.addEventListener("unhandledrejection", (e) => {
+  logDebug("PROMISE REJ: " + (e.reason || ""));
+});
 let token = localStorage.getItem("pi-web-token") || "";
 let activeInstanceId = null;
 const instances = new Map(); // id -> { ws, term, fitAddon, cwd }
@@ -407,26 +424,39 @@ const menuToggle = document.getElementById("menu-toggle");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
 
 function openSidebar() {
+  logDebug("openSidebar called");
   const sidebar = document.getElementById("sidebar");
-  if (sidebar) sidebar.classList.add("open");
-  if (sidebarOverlay) sidebarOverlay.classList.add("open");
+  if (sidebar) { sidebar.classList.add("open"); logDebug("sidebar class added"); }
+  if (sidebarOverlay) { sidebarOverlay.classList.add("open"); logDebug("overlay class added"); }
 }
 
 function closeSidebar() {
+  logDebug("closeSidebar called");
   const sidebar = document.getElementById("sidebar");
-  if (sidebar) sidebar.classList.remove("open");
-  if (sidebarOverlay) sidebarOverlay.classList.remove("open");
+  if (sidebar) { sidebar.classList.remove("open"); logDebug("sidebar class removed"); }
+  if (sidebarOverlay) { sidebarOverlay.classList.remove("open"); logDebug("overlay class removed"); }
+}
+
+function toggleSidebar() {
+  logDebug("toggleSidebar called");
+  const sidebar = document.getElementById("sidebar");
+  if (sidebar && sidebar.classList.contains("open")) {
+    closeSidebar();
+  } else {
+    openSidebar();
+  }
 }
 
 if (menuToggle) {
-  menuToggle.addEventListener("click", () => {
-    const sidebar = document.getElementById("sidebar");
-    if (sidebar && sidebar.classList.contains("open")) {
-      closeSidebar();
-    } else {
-      openSidebar();
-    }
-  });
+  logDebug("menuToggle found, attaching listeners");
+  menuToggle.addEventListener("click", () => { logDebug("click fired"); toggleSidebar(); });
+  menuToggle.addEventListener("touchstart", (e) => {
+    logDebug("touchstart fired");
+    e.preventDefault();
+    toggleSidebar();
+  }, { passive: false });
+} else {
+  logDebug("menuToggle NOT FOUND");
 }
 
 if (sidebarOverlay) {

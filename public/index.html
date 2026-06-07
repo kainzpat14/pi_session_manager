@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>pi Web</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <div id="app">
-    <button id="menu-toggle" aria-label="Toggle menu">☰</button>
+    <button id="menu-toggle" aria-label="Toggle menu" onclick="toggleSidebar()">☰</button>
+    <div id="debug-log" style="position:fixed;bottom:0;left:0;right:0;max-height:120px;overflow:auto;background:rgba(0,0,0,0.85);color:#0f0;font-family:monospace;font-size:11px;padding:6px;z-index:999;display:none;"></div>
     <aside id="sidebar">
       <div class="sidebar-header">
         <h1>pi</h1>
@@ -53,6 +54,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>
