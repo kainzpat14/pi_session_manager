@@ -137,6 +137,7 @@ async function attachInstance(id, cwd) {
   pane.className = "terminal-pane";
   document.getElementById("terminals").appendChild(pane);
   term.open(pane);
+  term.reset();       // Clean state for reconnect — avoids stale mode mismatches
   fitAddon.fit();
 
   instances.set(id, { ws, term, fitAddon, cwd, pane });
