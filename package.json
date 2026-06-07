@@ -1,0 +1,23 @@
+{
+  "name": "pi-web",
+  "version": "1.0.0",
+  "description": "Web frontend for pi — renders the TUI via xterm.js in a PTY",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc && node dist/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-pty": "^1.0.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.12.0",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.4.5"
+  },
+  "license": "MIT"
+}
