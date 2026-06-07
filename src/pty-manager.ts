@@ -16,17 +16,12 @@ function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
-export function spawnPi(cwd: string): PiInstance {
+function createPiInstance(
+  proc: pty.IPty,
+  cwd: string,
+  args?: string[],
+): PiInstance {
   const id = generateId();
-  const piPath = process.env.PI_PATH || "pi";
-
-  const proc = pty.spawn(piPath, [], {
-    name: "xterm-256color",
-    cols: 120,
-    rows: 30,
-    cwd,
-    env: process.env as { [key: string]: string },
-  });
 
   const instance: PiInstance = {
     id,
@@ -55,6 +50,31 @@ export function spawnPi(cwd: string): PiInstance {
 
   instances.set(id, instance);
   return instance;
+}
+
+export function spawnPi(cwd: string): PiInstance {
+  const piPath = process.env.PI_PATH || "pi";
+  const proc = pty.spawn(piPath, [], {
+    name: "xterm-256color",
+    cols: 120,
+    rows: 30,
+    cwd,
+    env: process.env as { [key: string]: string },
+  });
+  return createPiInstance(proc, cwd);
+}
+
+export function spawnPiWithSession(sessionPath: string): PiInstance {
+  const piPath = process.env.PI_PATH || "pi";
+  const cwd = process.env.HOME || "/home/dev";
+  const proc = pty.spawn(piPath, ["--session", sessionPath], {
+    name: "xterm-256color",
+    cols: 120,
+    rows: 30,
+    cwd,
+    env: process.env as { [key: string]: string },
+  });
+  return createPiInstance(proc, cwd);
 }
 
 export function getInstance(id: string): PiInstance | undefined {

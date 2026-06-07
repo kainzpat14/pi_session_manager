@@ -9,6 +9,7 @@
 </head>
 <body>
   <div id="app">
+    <button id="menu-toggle" aria-label="Toggle menu">☰</button>
     <aside id="sidebar">
       <div class="sidebar-header">
         <h1>pi</h1>
@@ -17,6 +18,10 @@
       <div class="sidebar-section">
         <h2>Active</h2>
         <ul id="instance-list"></ul>
+      </div>
+      <div class="sidebar-section">
+        <h2>History</h2>
+        <ul id="history-list"></ul>
       </div>
       <div class="sidebar-section">
         <h2>New in folder</h2>
@@ -29,6 +34,7 @@
         <span id="status-text">Ready</span>
       </div>
     </aside>
+    <div id="sidebar-overlay"></div>
     <main id="main">
       <div id="tabs"></div>
       <div id="terminals"></div>

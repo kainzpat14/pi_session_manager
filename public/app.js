@@ -28,7 +28,9 @@ loginBtn.addEventListener("click", () => {
 
 function initApp() {
   refreshInstanceList();
+  refreshHistory();
   setInterval(refreshInstanceList, 3000);
+  setInterval(refreshHistory, 10000);
 }
 
 /* ---------- API helpers ---------- */
@@ -85,7 +87,14 @@ function renderInstanceList(list) {
     });
     li.appendChild(close);
 
-    li.addEventListener("click", () => switchToInstance(item.id));
+    li.addEventListener("click", async () => {
+      closeSidebar();
+      if (!instances.has(item.id)) {
+        await attachInstance(item.id, item.cwd);
+      } else {
+        switchToInstance(item.id);
+      }
+    });
     instanceList.appendChild(li);
   }
 }
@@ -233,16 +242,127 @@ function basename(p) {
   return p.replace(/\\/g, "/").split("/").filter(Boolean).pop() || p;
 }
 
+/* ---------- Session history ---------- */
+
+const historyList = document.getElementById("history-list");
+
+async function refreshHistory() {
+  try {
+    const sessions = await api("GET", "/sessions");
+    renderHistory(sessions);
+  } catch (e) {
+    historyList.innerHTML = "<li class='history-empty'>Error loading</li>";
+  }
+}
+
+function formatDate(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function renderHistory(sessions) {
+  historyList.innerHTML = "";
+  if (sessions.length === 0) {
+    historyList.innerHTML = "<li class='history-empty'>No past sessions</li>";
+    return;
+  }
+  for (const s of sessions) {
+    const li = document.createElement("li");
+    li.className = "history-item";
+    li.dataset.id = s.id;
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    const date = formatDate(s.timestamp);
+    meta.innerHTML = `<span class="history-date">${date}</span>` +
+      `<span class="history-info">${s.lines} msgs · ${formatSize(s.size)}</span>`;
+    li.appendChild(meta);
+
+    const cwd = document.createElement("div");
+    cwd.className = "history-cwd";
+    cwd.textContent = basename(s.cwd);
+    cwd.title = s.cwd;
+    li.appendChild(cwd);
+
+    const actions = document.createElement("div");
+    actions.className = "history-actions";
+
+    const resumeBtn = document.createElement("button");
+    resumeBtn.textContent = "▶";
+    resumeBtn.title = "Resume session";
+    resumeBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      closeSidebar();
+      await resumeSession(s.id);
+    });
+    actions.appendChild(resumeBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "🗑";
+    delBtn.title = "Delete session";
+    delBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm("Delete this session permanently?")) return;
+      await api("DELETE", `/sessions/${s.id}`);
+      refreshHistory();
+    });
+    actions.appendChild(delBtn);
+
+    li.appendChild(actions);
+    historyList.appendChild(li);
+  }
+}
+
+async function resumeSession(sessionId) {
+  const { id, cwd } = await api("POST", `/sessions/${sessionId}/resume`);
+  await attachInstance(id, cwd);
+  refreshInstanceList();
+}
+
+/* ---------- Mobile menu toggle ---------- */
+
+const menuToggle = document.getElementById("menu-toggle");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+
+function openSidebar() {
+  document.getElementById("sidebar").classList.add("open");
+  sidebarOverlay.classList.add("open");
+}
+
+function closeSidebar() {
+  document.getElementById("sidebar").classList.remove("open");
+  sidebarOverlay.classList.remove("open");
+}
+
+menuToggle.addEventListener("click", () => {
+  if (document.getElementById("sidebar").classList.contains("open")) {
+    closeSidebar();
+  } else {
+    openSidebar();
+  }
+});
+
+sidebarOverlay.addEventListener("click", closeSidebar);
+
 /* ---------- Sidebar buttons ---------- */
 
 document.getElementById("new-session-btn").addEventListener("click", async () => {
   const cwd = document.getElementById("new-cwd-input").value.trim() || "/home/dev";
+  closeSidebar();
   await createInstance(cwd);
 });
 
 document.getElementById("new-cwd-btn").addEventListener("click", async () => {
   const cwd = document.getElementById("new-cwd-input").value.trim();
   if (!cwd) return;
+  closeSidebar();
   await createInstance(cwd);
 });
 

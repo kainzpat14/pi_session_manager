@@ -3,6 +3,7 @@ import * as PtyManager from "./pty-manager";
 import { loadConfig } from "./config";
 import { existsSync } from "fs";
 import { resolve } from "path";
+import * as SessionStore from "./session-store";
 
 const router = Router();
 
@@ -50,6 +51,27 @@ router.post("/instances/:id/resize", (req, res) => {
   }
   const ok = PtyManager.resizeInstance(req.params.id, cols, rows);
   res.json({ ok });
+});
+
+/* ---------- Session history ---------- */
+
+router.get("/sessions", (_req, res) => {
+  res.json(SessionStore.listSessions());
+});
+
+router.delete("/sessions/:id", (req, res) => {
+  const ok = SessionStore.deleteSession(req.params.id);
+  res.json({ ok });
+});
+
+router.post("/sessions/:id/resume", (req, res) => {
+  const sessionPath = SessionStore.findSessionPath(req.params.id);
+  if (!sessionPath) {
+    res.status(404).json({ error: "Session not found" });
+    return;
+  }
+  const instance = PtyManager.spawnPiWithSession(sessionPath);
+  res.json({ id: instance.id, cwd: instance.cwd, pid: instance.pty.pid });
 });
 
 export default router;
