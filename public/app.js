@@ -29,6 +29,7 @@ loginBtn.addEventListener("click", () => {
 function initApp() {
   refreshInstanceList();
   refreshHistory();
+  loadFs(fsCurrentPath);
   setInterval(refreshInstanceList, 3000);
   setInterval(refreshHistory, 10000);
 }
@@ -334,35 +335,108 @@ async function resumeSession(sessionId) {
   refreshInstanceList();
 }
 
+/* ---------- File explorer ---------- */
+
+const fsList = document.getElementById("fs-list");
+const fsBreadcrumb = document.getElementById("fs-breadcrumb");
+let fsCurrentPath = "/home/dev";
+
+async function loadFs(path) {
+  if (!fsList || !fsBreadcrumb) return;
+  try {
+    const data = await api("GET", `/fs?path=${encodeURIComponent(path)}`);
+    fsCurrentPath = data.path;
+    renderFs(data);
+    const input = document.getElementById("new-cwd-input");
+    if (input) input.value = data.path;
+  } catch (e) {
+    fsList.innerHTML = "<li class='fs-item file'><span class='fs-icon'>⚠</span><span class='fs-name'>Error loading</span></li>";
+  }
+}
+
+function renderFs(data) {
+  if (!fsList || !fsBreadcrumb) return;
+  fsList.innerHTML = "";
+
+  // Breadcrumb
+  if (data.parent) {
+    fsBreadcrumb.textContent = "↑ " + data.path;
+    fsBreadcrumb.title = "Go up to " + data.parent;
+    fsBreadcrumb.onclick = () => loadFs(data.parent);
+  } else {
+    fsBreadcrumb.textContent = data.path;
+    fsBreadcrumb.title = data.path;
+    fsBreadcrumb.onclick = null;
+  }
+
+  // Create session here button
+  const createBtn = document.createElement("button");
+  createBtn.className = "fs-create-btn";
+  createBtn.textContent = "+ New session here";
+  createBtn.addEventListener("click", async () => {
+    closeSidebar();
+    await createInstance(data.path);
+  });
+  fsList.appendChild(createBtn);
+
+  for (const entry of data.entries) {
+    const li = document.createElement("li");
+    li.className = "fs-item " + entry.type;
+
+    const icon = document.createElement("span");
+    icon.className = "fs-icon";
+    icon.textContent = entry.type === "dir" ? "📁" : "📄";
+    li.appendChild(icon);
+
+    const name = document.createElement("span");
+    name.className = "fs-name";
+    name.textContent = entry.name;
+    li.appendChild(name);
+
+    if (entry.type === "dir") {
+      li.addEventListener("click", () => loadFs(entry.path));
+    }
+
+    fsList.appendChild(li);
+  }
+}
+
 /* ---------- Mobile menu toggle ---------- */
 
 const menuToggle = document.getElementById("menu-toggle");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
 
 function openSidebar() {
-  document.getElementById("sidebar").classList.add("open");
-  sidebarOverlay.classList.add("open");
+  const sidebar = document.getElementById("sidebar");
+  if (sidebar) sidebar.classList.add("open");
+  if (sidebarOverlay) sidebarOverlay.classList.add("open");
 }
 
 function closeSidebar() {
-  document.getElementById("sidebar").classList.remove("open");
-  sidebarOverlay.classList.remove("open");
+  const sidebar = document.getElementById("sidebar");
+  if (sidebar) sidebar.classList.remove("open");
+  if (sidebarOverlay) sidebarOverlay.classList.remove("open");
 }
 
-menuToggle.addEventListener("click", () => {
-  if (document.getElementById("sidebar").classList.contains("open")) {
-    closeSidebar();
-  } else {
-    openSidebar();
-  }
-});
+if (menuToggle) {
+  menuToggle.addEventListener("click", () => {
+    const sidebar = document.getElementById("sidebar");
+    if (sidebar && sidebar.classList.contains("open")) {
+      closeSidebar();
+    } else {
+      openSidebar();
+    }
+  });
+}
 
-sidebarOverlay.addEventListener("click", closeSidebar);
+if (sidebarOverlay) {
+  sidebarOverlay.addEventListener("click", closeSidebar);
+}
 
 /* ---------- Sidebar buttons ---------- */
 
 document.getElementById("new-session-btn").addEventListener("click", async () => {
-  const cwd = document.getElementById("new-cwd-input").value.trim() || "/home/dev";
+  const cwd = fsCurrentPath || "/home/dev";
   closeSidebar();
   await createInstance(cwd);
 });

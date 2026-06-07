@@ -1,8 +1,8 @@
 import { Router } from "express";
 import * as PtyManager from "./pty-manager";
 import { loadConfig } from "./config";
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { existsSync, readdirSync, statSync } from "fs";
+import { resolve, join, basename } from "path";
 import * as SessionStore from "./session-store";
 
 const router = Router();
@@ -81,6 +81,42 @@ router.post("/sessions/:id/resume", (req, res) => {
   const cwd = entry?.cwd || process.env.HOME || "/home/dev";
   const instance = PtyManager.spawnPiWithSession(sessionPath, cwd);
   res.json({ id: instance.id, cwd: instance.cwd, pid: instance.pty.pid });
+});
+
+/* ---------- File explorer ---------- */
+
+router.get("/fs", (req, res) => {
+  const path = (req.query.path as string) || process.env.HOME || "/home/dev";
+  const resolved = resolve(path);
+  if (!existsSync(resolved)) {
+    res.status(404).json({ error: "Path not found" });
+    return;
+  }
+  const stat = statSync(resolved);
+  if (!stat.isDirectory()) {
+    res.status(400).json({ error: "Not a directory" });
+    return;
+  }
+
+  const entries: { name: string; type: "dir" | "file"; path: string }[] = [];
+  for (const name of readdirSync(resolved)) {
+    try {
+      const childStat = statSync(join(resolved, name));
+      entries.push({
+        name,
+        type: childStat.isDirectory() ? "dir" : "file",
+        path: join(resolved, name),
+      });
+    } catch {
+      // skip inaccessible entries
+    }
+  }
+  entries.sort((a, b) => {
+    if (a.type === b.type) return a.name.localeCompare(b.name);
+    return a.type === "dir" ? -1 : 1;
+  });
+
+  res.json({ path: resolved, parent: basename(resolved) === resolved ? null : join(resolved, ".."), entries });
 });
 
 export default router;

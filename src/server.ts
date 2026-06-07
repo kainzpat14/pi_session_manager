@@ -12,7 +12,13 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 app.use(express.json());
 app.use("/api", sessionApi);
-app.use(express.static(join(__dirname, "../public")));
+app.use(express.static(join(__dirname, "../public"), {
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+  },
+}));
 
 app.get("/config-info", (_req, res) => {
   const config = loadConfig();

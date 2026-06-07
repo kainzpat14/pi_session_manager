@@ -262,6 +262,99 @@ html, body, #app {
   }
 }
 
+/* File explorer */
+.fs-breadcrumb {
+  font-size: 0.75rem;
+  color: #8b949e;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.fs-breadcrumb:hover {
+  color: #58a6ff;
+}
+
+.fs-list {
+  list-style: none;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  background: #0d1117;
+}
+
+.fs-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid #21262d;
+  min-height: 36px;
+}
+
+.fs-item:last-child {
+  border-bottom: none;
+}
+
+.fs-item:hover {
+  background: #21262d;
+}
+
+.fs-item.dir {
+  color: #58a6ff;
+}
+
+.fs-item.file {
+  color: #8b949e;
+  cursor: default;
+}
+
+.fs-item .fs-icon {
+  width: 18px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.fs-item .fs-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fs-create-btn {
+  width: 100%;
+  background: #238636;
+  border: none;
+  color: white;
+  border-radius: 4px;
+  padding: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.fs-create-btn:hover {
+  background: #2ea043;
+}
+
+@media (max-width: 768px) {
+  .fs-item {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+  }
+  .fs-create-btn {
+    min-height: 44px;
+    font-size: 1rem;
+  }
+}
+
 /* Main */
 #main {
   flex: 1;
