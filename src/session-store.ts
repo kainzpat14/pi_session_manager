@@ -1,4 +1,4 @@
-import { readdirSync, statSync, readFileSync, unlinkSync, existsSync } from "fs";
+import { readdirSync, statSync, readFileSync, unlinkSync, existsSync, readlinkSync } from "fs";
 import { join, basename } from "path";
 import { homedir } from "os";
 
@@ -14,17 +14,51 @@ export interface SessionEntry {
 }
 
 function decodeCwd(dirName: string): string {
-  // pi encodes cwd as URL-safe-ish path segments
-  // e.g. "--home-dev--" -> "/home/dev"
-  // Let's try a simple decode: replace "--" with "/" and remove leading "/"
-  let decoded = dirName.replace(/--/g, "/");
-  if (decoded.startsWith("/")) decoded = decoded.slice(1);
-  return decoded || dirName;
+  const inner = dirName.replace(/^--/, "").replace(/--$/, "");
+  return "/" + inner.replace(/-/g, "/");
 }
 
-export function listSessions(): SessionEntry[] {
+function encodeCwd(cwd: string): string {
+  return "--" + cwd.replace(/^\//, "").replace(/\//g, "-") + "--";
+}
+
+function isPiProcess(pid: number, piWebPids: Set<number>): boolean {
+  if (piWebPids.has(pid)) return false;
+  try {
+    const exe = readlinkSync(`/proc/${pid}/exe`);
+    const cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf-8");
+    const exeName = basename(exe);
+    // "pi" binary, or node running pi
+    return exeName === "pi" || (exeName === "node" && cmdline.includes("pi"));
+  } catch {
+    return false;
+  }
+}
+
+function getExternallyActiveSessionDirs(piWebPids: Set<number>): Set<string> {
+  const dirs = new Set<string>();
+  try {
+    for (const entry of readdirSync("/proc")) {
+      const pid = parseInt(entry, 10);
+      if (Number.isNaN(pid)) continue;
+      if (!isPiProcess(pid, piWebPids)) continue;
+      try {
+        const cwd = readlinkSync(`/proc/${pid}/cwd`);
+        dirs.add(encodeCwd(cwd));
+      } catch {
+        // process exited between check and read
+      }
+    }
+  } catch {
+    // /proc not available
+  }
+  return dirs;
+}
+
+export function listSessions(excludePaths?: Set<string>, piWebPids?: Set<number>): SessionEntry[] {
   if (!existsSync(SESSIONS_DIR)) return [];
 
+  const externalDirs = getExternallyActiveSessionDirs(piWebPids ?? new Set());
   const entries: SessionEntry[] = [];
 
   for (const dirName of readdirSync(SESSIONS_DIR)) {
@@ -34,10 +68,16 @@ export function listSessions(): SessionEntry[] {
 
     const cwd = decodeCwd(dirName);
 
+    // Skip entire directory if an external pi process is running there
+    if (externalDirs.has(dirName)) continue;
+
     for (const fileName of readdirSync(dirPath)) {
       if (!fileName.endsWith(".jsonl")) continue;
       const filePath = join(dirPath, fileName);
       const fileStat = statSync(filePath);
+
+      // Skip if actively managed by pi-web
+      if (excludePaths?.has(filePath)) continue;
 
       let header: any = {};
       try {
@@ -47,7 +87,6 @@ export function listSessions(): SessionEntry[] {
         // ignore malformed
       }
 
-      // Count lines for message count approximation
       let lines = 0;
       try {
         const content = readFileSync(filePath, "utf-8");
@@ -67,7 +106,6 @@ export function listSessions(): SessionEntry[] {
     }
   }
 
-  // Sort newest first
   return entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 }
 

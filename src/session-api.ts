@@ -61,7 +61,9 @@ router.post("/instances/:id/redraw", (req, res) => {
 /* ---------- Session history ---------- */
 
 router.get("/sessions", (_req, res) => {
-  res.json(SessionStore.listSessions());
+  const activePaths = new Set(PtyManager.getActiveSessionPaths());
+  const piWebPids = new Set(PtyManager.getAllPids());
+  res.json(SessionStore.listSessions(activePaths, piWebPids));
 });
 
 router.delete("/sessions/:id", (req, res) => {
@@ -75,7 +77,9 @@ router.post("/sessions/:id/resume", (req, res) => {
     res.status(404).json({ error: "Session not found" });
     return;
   }
-  const instance = PtyManager.spawnPiWithSession(sessionPath);
+  const entry = SessionStore.listSessions().find((s) => s.id === req.params.id);
+  const cwd = entry?.cwd || process.env.HOME || "/home/dev";
+  const instance = PtyManager.spawnPiWithSession(sessionPath, cwd);
   res.json({ id: instance.id, cwd: instance.cwd, pid: instance.pty.pid });
 });
 

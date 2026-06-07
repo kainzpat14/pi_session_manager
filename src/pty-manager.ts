@@ -9,6 +9,7 @@ export interface PiInstance {
   wsClients: Set<WebSocket>;
   createdAt: number;
   replayBuffer: string;
+  sessionPath?: string;
 }
 
 const instances = new Map<string, PiInstance>();
@@ -70,17 +71,19 @@ export function spawnPi(cwd: string): PiInstance {
   return createPiInstance(proc, cwd);
 }
 
-export function spawnPiWithSession(sessionPath: string): PiInstance {
+export function spawnPiWithSession(sessionPath: string, cwd?: string): PiInstance {
   const piPath = process.env.PI_PATH || "pi";
-  const cwd = process.env.HOME || "/home/dev";
+  const resolvedCwd = cwd || process.env.HOME || "/home/dev";
   const proc = pty.spawn(piPath, ["--session", sessionPath], {
     name: "xterm-256color",
     cols: 120,
     rows: 30,
-    cwd,
+    cwd: resolvedCwd,
     env: process.env as { [key: string]: string },
   });
-  return createPiInstance(proc, cwd);
+  const inst = createPiInstance(proc, resolvedCwd);
+  inst.sessionPath = sessionPath;
+  return inst;
 }
 
 export function getInstance(id: string): PiInstance | undefined {
@@ -147,4 +150,14 @@ export function detachWebSocket(id: string, ws: WebSocket): void {
   if (instance) {
     instance.wsClients.delete(ws);
   }
+}
+
+export function getActiveSessionPaths(): string[] {
+  return Array.from(instances.values())
+    .map((i) => i.sessionPath)
+    .filter((p): p is string => !!p);
+}
+
+export function getAllPids(): number[] {
+  return Array.from(instances.values()).map((i) => i.pty.pid);
 }
