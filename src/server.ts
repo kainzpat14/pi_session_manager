@@ -52,15 +52,22 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const isNewInstance = Date.now() - instance.createdAt < 5000;
-
   PtyManager.attachWebSocket(instanceId, ws);
 
-  // Only replay buffer for fresh instances (<5s). For reconnects, rely on
-  // SIGWINCH to trigger a clean full redraw from pi, avoiding stale terminal
-  // state that can confuse a fresh xterm.js client.
-  if (isNewInstance && instance.replayBuffer) {
-    ws.send(JSON.stringify({ type: "data", instanceId: instanceId, data: instance.replayBuffer }));
+  // Replay recent PTY output so new clients see current TUI state.
+  // For reconnects (instance > 5s old), prepend a terminal init sequence
+  // that puts xterm.js into the modes pi's TUI expects (alternate screen,
+  // application cursor keys, etc.) since the replay buffer window may have
+  // missed the initial setup escape sequences.
+  const isReconnect = Date.now() - instance.createdAt > 5000;
+  if (instance.replayBuffer) {
+    let data = instance.replayBuffer;
+    if (isReconnect) {
+      // Enter alternate screen + application cursor keys + normal wraparound.
+      // This matches the state pi's TUI framework sets up on start.
+      data = "\x1b[?1049h\x1b[?1h\x1b[?7h" + data;
+    }
+    ws.send(JSON.stringify({ type: "data", instanceId: instanceId, data }));
   }
 
   // Nudge pi to redraw its TUI (SIGWINCH may be lost during suspend)
