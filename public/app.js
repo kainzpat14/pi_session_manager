@@ -2,8 +2,30 @@
 
 const API_BASE = "";
 
-/* ---------- Visible debug logger (no console access on mobile) ---------- */
+/* ---------- DOM element refs (must be declared before any function calls) ---------- */
 const debugLog = document.getElementById("debug-log");
+const loginOverlay = document.getElementById("login-overlay");
+const tokenInput = document.getElementById("token-input");
+const loginBtn = document.getElementById("login-btn");
+const instanceList = document.getElementById("instance-list");
+const statusText = document.getElementById("status-text");
+const historyList = document.getElementById("history-list");
+const fsList = document.getElementById("fs-list");
+const fsBreadcrumb = document.getElementById("fs-breadcrumb");
+const menuToggle = document.getElementById("menu-toggle");
+const sidebarOverlay = document.getElementById("sidebar-overlay");
+const tabsEl = document.getElementById("tabs");
+const newSessionBtn = document.getElementById("new-session-btn");
+const newCwdBtn = document.getElementById("new-cwd-btn");
+const newCwdInput = document.getElementById("new-cwd-input");
+
+/* ---------- State ---------- */
+let token = localStorage.getItem("pi-web-token") || "";
+let activeInstanceId = null;
+const instances = new Map(); // id -> { ws, term, fitAddon, cwd }
+let fsCurrentPath = "/home/dev";
+
+/* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
   if (!debugLog) return;
   debugLog.style.display = "block";
@@ -12,44 +34,14 @@ function logDebug(msg) {
   debugLog.appendChild(line);
   debugLog.scrollTop = debugLog.scrollHeight;
 }
+
 window.onerror = (msg, src, line, col, err) => {
   logDebug("ERROR: " + msg + " @" + line + ":" + col);
 };
+
 window.addEventListener("unhandledrejection", (e) => {
   logDebug("PROMISE REJ: " + (e.reason || ""));
 });
-let token = localStorage.getItem("pi-web-token") || "";
-let activeInstanceId = null;
-const instances = new Map(); // id -> { ws, term, fitAddon, cwd }
-
-/* ---------- Login ---------- */
-
-const loginOverlay = document.getElementById("login-overlay");
-const tokenInput = document.getElementById("token-input");
-const loginBtn = document.getElementById("login-btn");
-
-if (token) {
-  loginOverlay.classList.add("hidden");
-  initApp();
-}
-
-loginBtn.addEventListener("click", () => {
-  token = tokenInput.value.trim();
-  if (!token) return;
-  localStorage.setItem("pi-web-token", token);
-  loginOverlay.classList.add("hidden");
-  initApp();
-});
-
-/* ---------- App init ---------- */
-
-function initApp() {
-  refreshInstanceList();
-  refreshHistory();
-  loadFs(fsCurrentPath);
-  setInterval(refreshInstanceList, 3000);
-  setInterval(refreshHistory, 10000);
-}
 
 /* ---------- API helpers ---------- */
 
@@ -69,20 +61,18 @@ async function api(method, path, body) {
 
 /* ---------- Instance list ---------- */
 
-const instanceList = document.getElementById("instance-list");
-const statusText = document.getElementById("status-text");
-
 async function refreshInstanceList() {
   try {
     const list = await api("GET", "/instances");
     renderInstanceList(list);
-    statusText.textContent = `${list.length} active`;
+    if (statusText) statusText.textContent = `${list.length} active`;
   } catch (e) {
-    statusText.textContent = "Error";
+    if (statusText) statusText.textContent = "Error";
   }
 }
 
 function renderInstanceList(list) {
+  if (!instanceList) return;
   instanceList.innerHTML = "";
   for (const item of list) {
     const li = document.createElement("li");
@@ -228,9 +218,8 @@ function removeInstance(id) {
 
 /* ---------- Tabs ---------- */
 
-const tabsEl = document.getElementById("tabs");
-
 function addTab(id, cwd) {
+  if (!tabsEl) return;
   if (document.querySelector(`.tab[data-id="${id}"]`)) return;
   const tab = document.createElement("div");
   tab.className = "tab";
@@ -265,10 +254,6 @@ function switchToInstance(id) {
       }, 0);
     }
   }
-  for (const li of instanceList.querySelectorAll("li")) {
-    // find which instance this li belongs to via click handler closure is hard,
-    // so just re-render
-  }
   refreshInstanceList();
 }
 
@@ -278,14 +263,12 @@ function basename(p) {
 
 /* ---------- Session history ---------- */
 
-const historyList = document.getElementById("history-list");
-
 async function refreshHistory() {
   try {
     const sessions = await api("GET", "/sessions");
     renderHistory(sessions);
   } catch (e) {
-    historyList.innerHTML = "<li class='history-empty'>Error loading</li>";
+    if (historyList) historyList.innerHTML = "<li class='history-empty'>Error loading</li>";
   }
 }
 
@@ -296,6 +279,7 @@ function formatDate(ts) {
 }
 
 function renderHistory(sessions) {
+  if (!historyList) return;
   historyList.innerHTML = "";
   if (sessions.length === 0) {
     historyList.innerHTML = "<li class='history-empty'>No past sessions</li>";
@@ -354,18 +338,13 @@ async function resumeSession(sessionId) {
 
 /* ---------- File explorer ---------- */
 
-const fsList = document.getElementById("fs-list");
-const fsBreadcrumb = document.getElementById("fs-breadcrumb");
-let fsCurrentPath = "/home/dev";
-
 async function loadFs(path) {
   if (!fsList || !fsBreadcrumb) return;
   try {
     const data = await api("GET", `/fs?path=${encodeURIComponent(path)}`);
     fsCurrentPath = data.path;
     renderFs(data);
-    const input = document.getElementById("new-cwd-input");
-    if (input) input.value = data.path;
+    if (newCwdInput) newCwdInput.value = data.path;
   } catch (e) {
     fsList.innerHTML = "<li class='fs-item file'><span class='fs-icon'>⚠</span><span class='fs-name'>Error loading</span></li>";
   }
@@ -420,25 +399,19 @@ function renderFs(data) {
 
 /* ---------- Mobile menu toggle ---------- */
 
-const menuToggle = document.getElementById("menu-toggle");
-const sidebarOverlay = document.getElementById("sidebar-overlay");
-
 function openSidebar() {
-  logDebug("openSidebar called");
   const sidebar = document.getElementById("sidebar");
-  if (sidebar) { sidebar.classList.add("open"); logDebug("sidebar class added"); }
-  if (sidebarOverlay) { sidebarOverlay.classList.add("open"); logDebug("overlay class added"); }
+  if (sidebar) sidebar.classList.add("open");
+  if (sidebarOverlay) sidebarOverlay.classList.add("open");
 }
 
 function closeSidebar() {
-  logDebug("closeSidebar called");
   const sidebar = document.getElementById("sidebar");
-  if (sidebar) { sidebar.classList.remove("open"); logDebug("sidebar class removed"); }
-  if (sidebarOverlay) { sidebarOverlay.classList.remove("open"); logDebug("overlay class removed"); }
+  if (sidebar) sidebar.classList.remove("open");
+  if (sidebarOverlay) sidebarOverlay.classList.remove("open");
 }
 
 function toggleSidebar() {
-  logDebug("toggleSidebar called");
   const sidebar = document.getElementById("sidebar");
   if (sidebar && sidebar.classList.contains("open")) {
     closeSidebar();
@@ -448,36 +421,64 @@ function toggleSidebar() {
 }
 
 if (menuToggle) {
-  logDebug("menuToggle found, attaching listeners");
-  menuToggle.addEventListener("click", () => { logDebug("click fired"); toggleSidebar(); });
+  menuToggle.addEventListener("click", toggleSidebar);
   menuToggle.addEventListener("touchstart", (e) => {
-    logDebug("touchstart fired");
     e.preventDefault();
     toggleSidebar();
   }, { passive: false });
-} else {
-  logDebug("menuToggle NOT FOUND");
 }
 
 if (sidebarOverlay) {
   sidebarOverlay.addEventListener("click", closeSidebar);
 }
 
-/* ---------- Sidebar buttons ---------- */
+/* ---------- App init ---------- */
 
-document.getElementById("new-session-btn").addEventListener("click", async () => {
-  const cwd = fsCurrentPath || "/home/dev";
-  closeSidebar();
-  await createInstance(cwd);
-});
+function initApp() {
+  refreshInstanceList();
+  refreshHistory();
+  loadFs(fsCurrentPath);
+  setInterval(refreshInstanceList, 3000);
+  setInterval(refreshHistory, 10000);
+}
 
-document.getElementById("new-cwd-btn").addEventListener("click", async () => {
-  const cwd = document.getElementById("new-cwd-input").value.trim();
-  if (!cwd) return;
-  closeSidebar();
-  await createInstance(cwd);
-});
+/* ---------- Event listeners ---------- */
 
-document.getElementById("new-cwd-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("new-cwd-btn").click();
-});
+if (token) {
+  if (loginOverlay) loginOverlay.classList.add("hidden");
+  initApp();
+}
+
+if (loginBtn) {
+  loginBtn.addEventListener("click", () => {
+    token = tokenInput.value.trim();
+    if (!token) return;
+    localStorage.setItem("pi-web-token", token);
+    if (loginOverlay) loginOverlay.classList.add("hidden");
+    initApp();
+  });
+}
+
+if (newSessionBtn) {
+  newSessionBtn.addEventListener("click", async () => {
+    const cwd = fsCurrentPath || "/home/dev";
+    closeSidebar();
+    await createInstance(cwd);
+  });
+}
+
+if (newCwdBtn) {
+  newCwdBtn.addEventListener("click", async () => {
+    if (!newCwdInput) return;
+    const cwd = newCwdInput.value.trim();
+    if (!cwd) return;
+    closeSidebar();
+    await createInstance(cwd);
+  });
+}
+
+if (newCwdInput) {
+  newCwdInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && newCwdBtn) newCwdBtn.click();
+  });
+}
