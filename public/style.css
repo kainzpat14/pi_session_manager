@@ -226,27 +226,40 @@ html, body, #app {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
 }
 
 .history-actions {
   display: flex;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .history-actions button {
   background: #21262d;
   border: 1px solid #30363d;
   color: #c9d1d9;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 0.75rem;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
   cursor: pointer;
+  min-width: 44px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .history-actions button:hover {
   background: #30363d;
+}
+
+@media (max-width: 768px) {
+  .history-actions button {
+    min-height: 44px;
+    min-width: 48px;
+    padding: 8px 14px;
+    font-size: 1rem;
+  }
 }
 
 /* Main */

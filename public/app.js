@@ -136,6 +136,7 @@ async function attachInstance(id, cwd) {
   ws.addEventListener("open", () => {
     fitAddon.fit();
     term.focus();
+    // Server auto-sends replay buffer + SIGWINCH on connect
   });
 
   ws.addEventListener("message", (event) => {
@@ -172,6 +173,21 @@ async function attachInstance(id, cwd) {
   });
 
   window.addEventListener("resize", () => fitAddon.fit());
+
+  // iOS Safari may blank the canvas on background/return
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && activeInstanceId === id) {
+      setTimeout(() => {
+        // Aggressive re-render: nudge dimensions to force full redraw
+        const cols = term.cols;
+        const rows = term.rows;
+        term.resize(cols - 1, rows);
+        term.resize(cols, rows);
+        fitAddon.fit();
+        term.refresh(0, rows - 1);
+      }, 100);
+    }
+  });
 
   addTab(id, cwd);
   switchToInstance(id);
@@ -261,12 +277,6 @@ function formatDate(ts) {
   return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatSize(bytes) {
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
 function renderHistory(sessions) {
   historyList.innerHTML = "";
   if (sessions.length === 0) {
@@ -280,14 +290,12 @@ function renderHistory(sessions) {
 
     const meta = document.createElement("div");
     meta.className = "history-meta";
-    const date = formatDate(s.timestamp);
-    meta.innerHTML = `<span class="history-date">${date}</span>` +
-      `<span class="history-info">${s.lines} msgs · ${formatSize(s.size)}</span>`;
+    meta.innerHTML = `<span class="history-date">${formatDate(s.timestamp)}</span>`;
     li.appendChild(meta);
 
     const cwd = document.createElement("div");
     cwd.className = "history-cwd";
-    cwd.textContent = basename(s.cwd);
+    cwd.textContent = s.cwd;
     cwd.title = s.cwd;
     li.appendChild(cwd);
 

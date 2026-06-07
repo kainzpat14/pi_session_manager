@@ -53,6 +53,11 @@ router.post("/instances/:id/resize", (req, res) => {
   res.json({ ok });
 });
 
+router.post("/instances/:id/redraw", (req, res) => {
+  const ok = PtyManager.redrawInstance(req.params.id);
+  res.json({ ok });
+});
+
 /* ---------- Session history ---------- */
 
 router.get("/sessions", (_req, res) => {

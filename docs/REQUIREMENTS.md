@@ -28,11 +28,21 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Resume past sessions with `--session <path>`
 - [x] Delete past session files permanently
 
+### History Display
+- [x] Show complete working directory path (not truncated to basename)
+- [x] Show session timestamp
+- [x] Do not show message count or file size
+- [x] Resume button: ▶ (play icon)
+- [x] Delete button: 🗑 (trash icon)
+- [x] Delete requires confirmation dialog
+
 ### Mobile
 - [x] Collapsible sidebar on mobile (< 768px)
 - [x] Hamburger menu (☰) toggles sidebar
 - [x] Dark overlay dismisses sidebar
 - [x] Sidebar auto-closes on instance selection
+- [x] History action buttons: min 44px height, 48px width on mobile
+- [x] History action buttons: larger touch targets (padding 8px 14px, font 1rem)
 
 ### Coexistence
 - [x] Telegram bridge continues working alongside web frontend

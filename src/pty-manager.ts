@@ -8,9 +8,11 @@ export interface PiInstance {
   cwd: string;
   wsClients: Set<WebSocket>;
   createdAt: number;
+  replayBuffer: string;
 }
 
 const instances = new Map<string, PiInstance>();
+const REPLAY_BUFFER_SIZE = 64 * 1024; // 64KB cap
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -19,7 +21,6 @@ function generateId(): string {
 function createPiInstance(
   proc: pty.IPty,
   cwd: string,
-  args?: string[],
 ): PiInstance {
   const id = generateId();
 
@@ -29,9 +30,14 @@ function createPiInstance(
     cwd,
     wsClients: new Set(),
     createdAt: Date.now(),
+    replayBuffer: "",
   };
 
   proc.onData((data: string) => {
+    instance.replayBuffer += data;
+    if (instance.replayBuffer.length > REPLAY_BUFFER_SIZE) {
+      instance.replayBuffer = instance.replayBuffer.slice(-REPLAY_BUFFER_SIZE);
+    }
     for (const ws of instance.wsClients) {
       if (ws.readyState === ws.OPEN) {
         ws.send(JSON.stringify({ type: "data", instanceId: id, data }));
@@ -115,6 +121,18 @@ export function resizeInstance(id: string, cols: number, rows: number): boolean 
   if (!instance) return false;
   instance.pty.resize(cols, rows);
   return true;
+}
+
+export function redrawInstance(id: string): boolean {
+  const instance = instances.get(id);
+  if (!instance) return false;
+  try {
+    // SIGWINCH triggers pi's TUI to redraw (ProcessTerminal.start handles it)
+    process.kill(instance.pty.pid, "SIGWINCH");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function attachWebSocket(id: string, ws: WebSocket): boolean {

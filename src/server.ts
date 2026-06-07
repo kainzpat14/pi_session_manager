@@ -48,6 +48,14 @@ wss.on("connection", (ws, req) => {
 
   PtyManager.attachWebSocket(instanceId, ws);
 
+  // Replay recent PTY output so new clients see current TUI state
+  if (instance.replayBuffer) {
+    ws.send(JSON.stringify({ type: "data", instanceId: instanceId, data: instance.replayBuffer }));
+  }
+
+  // Nudge pi to redraw its TUI (SIGWINCH may be lost during suspend)
+  PtyManager.redrawInstance(instanceId);
+
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
