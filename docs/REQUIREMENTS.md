@@ -19,6 +19,16 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Resize terminal (cols/rows)
 - [x] Multiple concurrent pi instances (tabs)
 
+### Session Tab Model
+- [ ] The main tab area contains exactly one **"pi"** tab that renders the currently selected pi session's TUI
+- [ ] Sessions are visible only in the sidebar, not as separate tabs
+- [ ] Each active pi session has its own **"Terminal"** tab (1:1 relationship)
+- [ ] Terminal tab contains a plain bash shell running in the pi session's working directory
+- [ ] Terminal is spawned automatically when the pi session is created
+- [ ] Terminal tab shares the same lifecycle as the pi session: when the pi session ends, the terminal is also killed/closed
+- [ ] Terminal tab is named **"Terminal"**
+- [ ] Resumed sessions also get a terminal tab automatically
+
 ### Reconnect / Resume
 - [x] Server maintains 64KB replay buffer per PTY instance
 - [x] New WebSocket connection replays recent output immediately

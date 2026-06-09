@@ -383,6 +383,23 @@ html, body, #app {
   overflow-x: auto;
 }
 
+.pi-tab {
+  padding: 8px 14px;
+  cursor: pointer;
+  border-right: 1px solid #30363d;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  font-weight: 600;
+  color: #58a6ff;
+}
+
+.pi-tab.active {
+  background: #0d1117;
+  border-bottom: 2px solid #58a6ff;
+}
+
 .tab {
   padding: 8px 14px;
   cursor: pointer;
@@ -399,29 +416,21 @@ html, body, #app {
   border-bottom: 2px solid #58a6ff;
 }
 
-.tab-close {
-  opacity: 0.5;
-  font-size: 0.7rem;
-}
-
-.tab-close:hover {
-  opacity: 1;
-  color: #f85149;
-}
-
 #terminals {
   flex: 1;
   position: relative;
 }
 
-.terminal-pane {
+.terminal-pane,
+.shell-pane {
   position: absolute;
   inset: 0;
   display: none;
   padding: 4px;
 }
 
-.terminal-pane.active {
+.terminal-pane.active,
+.shell-pane.active {
   display: block;
 }
 

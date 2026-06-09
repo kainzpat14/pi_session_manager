@@ -2,7 +2,7 @@
 
 const API_BASE = "";
 
-/* ---------- DOM element refs (must be declared before any function calls) ---------- */
+/* ---------- DOM element refs ---------- */
 const debugLog = document.getElementById("debug-log");
 const loginOverlay = document.getElementById("login-overlay");
 const tokenInput = document.getElementById("token-input");
@@ -15,14 +15,16 @@ const fsBreadcrumb = document.getElementById("fs-breadcrumb");
 const menuToggle = document.getElementById("menu-toggle");
 const sidebarOverlay = document.getElementById("sidebar-overlay");
 const tabsEl = document.getElementById("tabs");
+const piTab = document.getElementById("pi-tab");
 const newSessionBtn = document.getElementById("new-session-btn");
 const newCwdBtn = document.getElementById("new-cwd-btn");
 const newCwdInput = document.getElementById("new-cwd-input");
 
 /* ---------- State ---------- */
 let token = localStorage.getItem("pi-web-token") || "";
-let activeInstanceId = null;
-const instances = new Map(); // id -> { ws, term, fitAddon, cwd }
+let selectedInstanceId = null;   // sidebar selection
+let activeTab = "pi";            // "pi" or "shell-<id>"
+const instances = new Map();     // id -> { cwd, pi: {...}, shell: {...} }
 let fsCurrentPath = "/home/dev";
 
 /* ---------- Visible debug logger ---------- */
@@ -76,7 +78,7 @@ function renderInstanceList(list) {
   instanceList.innerHTML = "";
   for (const item of list) {
     const li = document.createElement("li");
-    if (item.id === activeInstanceId) li.classList.add("active");
+    if (item.id === selectedInstanceId) li.classList.add("active");
 
     const cwdSpan = document.createElement("span");
     cwdSpan.className = "instance-cwd";
@@ -97,11 +99,14 @@ function renderInstanceList(list) {
 
     li.addEventListener("click", async () => {
       closeSidebar();
+      selectedInstanceId = item.id;
       if (!instances.has(item.id)) {
         await attachInstance(item.id, item.cwd);
       } else {
-        switchToInstance(item.id);
+        activeTab = "pi";
+        updateVisibility();
       }
+      refreshInstanceList();
     });
     instanceList.appendChild(li);
   }
@@ -119,42 +124,45 @@ async function createInstance(cwd) {
 async function attachInstance(id, cwd) {
   if (instances.has(id)) return;
 
-  const ws = new WebSocket(
-    `ws://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}`
-  );
+  const entry = {
+    cwd,
+    pi: {},
+    shell: {},
+  };
 
-  const term = new Terminal({
+  // Create pi subsystem
+  const piWs = new WebSocket(
+    `ws://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}&target=pi`
+  );
+  const piTerm = new Terminal({
     fontSize: 14,
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     cursorBlink: true,
     allowProposedApi: true,
   });
+  const piFit = new FitAddon.FitAddon();
+  piTerm.loadAddon(piFit);
+  const piPane = document.createElement("div");
+  piPane.className = "terminal-pane";
+  document.getElementById("terminals").appendChild(piPane);
+  piTerm.open(piPane);
+  piTerm.reset();
+  piFit.fit();
 
-  const fitAddon = new FitAddon.FitAddon();
-  term.loadAddon(fitAddon);
+  entry.pi = { ws: piWs, term: piTerm, fitAddon: piFit, pane: piPane };
 
-  const pane = document.createElement("div");
-  pane.className = "terminal-pane";
-  document.getElementById("terminals").appendChild(pane);
-  term.open(pane);
-  term.reset();       // Clean state for reconnect — avoids stale mode mismatches
-  fitAddon.fit();
-
-  instances.set(id, { ws, term, fitAddon, cwd, pane });
-
-  ws.addEventListener("open", () => {
-    fitAddon.fit();
-    term.focus();
-    // Server auto-sends replay buffer + SIGWINCH on connect
+  piWs.addEventListener("open", () => {
+    piFit.fit();
+    piTerm.focus();
   });
 
-  ws.addEventListener("message", (event) => {
+  piWs.addEventListener("message", (event) => {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
-        term.write(msg.data);
+        piTerm.write(msg.data);
       } else if (msg.type === "exit") {
-        term.writeln(`\r\n\x1b[31m[pi exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
+        piTerm.writeln(`\r\n\x1b[31m[pi exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
         removeInstance(id);
         refreshInstanceList();
       }
@@ -163,103 +171,206 @@ async function attachInstance(id, cwd) {
     }
   });
 
-  ws.addEventListener("close", () => {
-    term.writeln("\r\n\x1b[33m[Connection closed]\x1b[0m");
+  piWs.addEventListener("close", () => {
+    piTerm.writeln("\r\n\x1b[33m[Connection closed]\x1b[0m");
     removeInstance(id);
     refreshInstanceList();
   });
 
-  term.onData((data) => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ type: "input", data }));
+  piTerm.onData((data) => {
+    if (piWs.readyState === piWs.OPEN) {
+      piWs.send(JSON.stringify({ type: "input", data }));
     }
   });
 
-  term.onResize(({ cols, rows }) => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ type: "resize", cols, rows }));
+  piTerm.onResize(({ cols, rows }) => {
+    if (piWs.readyState === piWs.OPEN) {
+      piWs.send(JSON.stringify({ type: "resize", cols, rows }));
     }
   });
 
-  window.addEventListener("resize", () => fitAddon.fit());
+  // Create shell subsystem
+  const shellWs = new WebSocket(
+    `ws://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}&target=shell`
+  );
+  const shellTerm = new Terminal({
+    fontSize: 14,
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    cursorBlink: true,
+    allowProposedApi: true,
+  });
+  const shellFit = new FitAddon.FitAddon();
+  shellTerm.loadAddon(shellFit);
+  const shellPane = document.createElement("div");
+  shellPane.className = "shell-pane";
+  document.getElementById("terminals").appendChild(shellPane);
+  shellTerm.open(shellPane);
+  shellTerm.reset();
+  shellFit.fit();
+
+  entry.shell = { ws: shellWs, term: shellTerm, fitAddon: shellFit, pane: shellPane };
+
+  shellWs.addEventListener("open", () => {
+    shellFit.fit();
+  });
+
+  shellWs.addEventListener("message", (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "data") {
+        shellTerm.write(msg.data);
+      } else if (msg.type === "exit") {
+        shellTerm.writeln(`\r\n\x1b[31m[shell exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
+        removeInstance(id);
+        refreshInstanceList();
+      }
+    } catch {
+      // ignore
+    }
+  });
+
+  shellWs.addEventListener("close", () => {
+    shellTerm.writeln("\r\n\x1b[33m[Connection closed]\x1b[0m");
+    removeInstance(id);
+    refreshInstanceList();
+  });
+
+  shellTerm.onData((data) => {
+    if (shellWs.readyState === shellWs.OPEN) {
+      shellWs.send(JSON.stringify({ type: "input", data }));
+    }
+  });
+
+  shellTerm.onResize(({ cols, rows }) => {
+    if (shellWs.readyState === shellWs.OPEN) {
+      shellWs.send(JSON.stringify({ type: "resize", cols, rows }));
+    }
+  });
+
+  instances.set(id, entry);
+
+  // Add Terminal tab
+  addTerminalTab(id);
+
+  selectedInstanceId = id;
+  activeTab = "pi";
+  updateVisibility();
+
+  window.addEventListener("resize", () => {
+    for (const [_, v] of instances) {
+      v.pi.fitAddon.fit();
+      v.shell.fitAddon.fit();
+    }
+  });
 
   // iOS Safari may blank the canvas on background/return
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && activeInstanceId === id) {
+    if (document.visibilityState === "visible") {
+      const entry = instances.get(selectedInstanceId);
+      if (!entry) return;
       setTimeout(() => {
-        // Aggressive re-render: nudge dimensions to force full redraw
-        const cols = term.cols;
-        const rows = term.rows;
-        term.resize(cols - 1, rows);
-        term.resize(cols, rows);
-        fitAddon.fit();
-        term.refresh(0, rows - 1);
+        if (activeTab === "pi") {
+          const t = entry.pi.term;
+          const f = entry.pi.fitAddon;
+          const cols = t.cols;
+          const rows = t.rows;
+          t.resize(cols - 1, rows);
+          t.resize(cols, rows);
+          f.fit();
+          t.refresh(0, rows - 1);
+        } else if (activeTab.startsWith("shell-")) {
+          const t = entry.shell.term;
+          const f = entry.shell.fitAddon;
+          const cols = t.cols;
+          const rows = t.rows;
+          t.resize(cols - 1, rows);
+          t.resize(cols, rows);
+          f.fit();
+          t.refresh(0, rows - 1);
+        }
       }, 100);
     }
   });
-
-  addTab(id, cwd);
-  switchToInstance(id);
 }
 
 function removeInstance(id) {
-  const inst = instances.get(id);
-  if (!inst) return;
-  try { inst.ws.close(); } catch {}
-  inst.term.dispose();
-  inst.pane.remove();
+  const entry = instances.get(id);
+  if (!entry) return;
+  try { entry.pi.ws.close(); } catch {}
+  try { entry.shell.ws.close(); } catch {}
+  entry.pi.term.dispose();
+  entry.shell.term.dispose();
+  entry.pi.pane.remove();
+  entry.shell.pane.remove();
   instances.delete(id);
-  removeTab(id);
-  if (activeInstanceId === id) {
-    activeInstanceId = null;
+  removeTerminalTab(id);
+
+  if (selectedInstanceId === id) {
     const remaining = Array.from(instances.keys());
-    if (remaining.length > 0) switchToInstance(remaining[0]);
+    selectedInstanceId = remaining.length > 0 ? remaining[0] : null;
   }
+  if (activeTab === "shell-" + id) {
+    activeTab = "pi";
+  }
+  updateVisibility();
 }
 
 /* ---------- Tabs ---------- */
 
-function addTab(id, cwd) {
+function addTerminalTab(id) {
   if (!tabsEl) return;
-  if (document.querySelector(`.tab[data-id="${id}"]`)) return;
+  if (document.querySelector(`.tab[data-shell-id="${id}"]`)) return;
   const tab = document.createElement("div");
   tab.className = "tab";
-  tab.dataset.id = id;
-  tab.innerHTML = `<span class="tab-label">${basename(cwd)}</span><span class="tab-close">×</span>`;
-  tab.querySelector(".tab-close").addEventListener("click", (e) => {
-    e.stopPropagation();
-    removeInstance(id);
-    refreshInstanceList();
+  tab.dataset.shellId = id;
+  tab.textContent = "Terminal";
+  tab.addEventListener("click", () => {
+    activeTab = "shell-" + id;
+    updateVisibility();
   });
-  tab.addEventListener("click", () => switchToInstance(id));
   tabsEl.appendChild(tab);
 }
 
-function removeTab(id) {
-  const tab = document.querySelector(`.tab[data-id="${id}"]`);
+function removeTerminalTab(id) {
+  const tab = document.querySelector(`.tab[data-shell-id="${id}"]`);
   if (tab) tab.remove();
 }
 
-function switchToInstance(id) {
-  activeInstanceId = id;
-
-  for (const el of document.querySelectorAll(".tab")) {
-    el.classList.toggle("active", el.dataset.id === id);
+function updateVisibility() {
+  // Hide all panes
+  for (const [_, v] of instances) {
+    v.pi.pane.classList.remove("active");
+    v.shell.pane.classList.remove("active");
   }
-  for (const [k, v] of instances) {
-    v.pane.classList.toggle("active", k === id);
-    if (k === id) {
+
+  // Show active pane
+  if (activeTab === "pi" && selectedInstanceId && instances.has(selectedInstanceId)) {
+    const entry = instances.get(selectedInstanceId);
+    entry.pi.pane.classList.add("active");
+    setTimeout(() => {
+      entry.pi.fitAddon.fit();
+      entry.pi.term.focus();
+    }, 0);
+  } else if (activeTab.startsWith("shell-")) {
+    const id = activeTab.slice(6);
+    if (instances.has(id)) {
+      const entry = instances.get(id);
+      entry.shell.pane.classList.add("active");
       setTimeout(() => {
-        v.fitAddon.fit();
-        v.term.focus();
+        entry.shell.fitAddon.fit();
+        entry.shell.term.focus();
       }, 0);
     }
   }
-  refreshInstanceList();
-}
 
-function basename(p) {
-  return p.replace(/\\/g, "/").split("/").filter(Boolean).pop() || p;
+  // Update tab styling
+  if (piTab) {
+    piTab.classList.toggle("active", activeTab === "pi");
+  }
+  for (const tab of document.querySelectorAll(".tab")) {
+    const tabId = tab.dataset.shellId;
+    tab.classList.toggle("active", tabId && activeTab === "shell-" + tabId);
+  }
 }
 
 /* ---------- Session history ---------- */
@@ -457,6 +568,13 @@ if (loginBtn) {
     localStorage.setItem("pi-web-token", token);
     if (loginOverlay) loginOverlay.classList.add("hidden");
     initApp();
+  });
+}
+
+if (piTab) {
+  piTab.addEventListener("click", () => {
+    activeTab = "pi";
+    updateVisibility();
   });
 }
 

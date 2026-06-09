@@ -148,6 +148,193 @@ When iOS Safari backgrounds a tab, the canvas may blank. On `visibilitychange` �
 3. `term.refresh(0, rows-1)` — explicit paint call
 4. 100ms delay to let iOS finish canvas wake-up
 
+## Session Tab Model (New Design)
+
+### Overview
+
+Replace the current "one tab per instance" model with:
+- **One static "pi" tab** that renders the currently selected pi session's TUI
+- **One "Terminal" tab per active instance** that renders a plain bash shell in the session's working directory
+- Sessions are listed only in the sidebar; tabs are not used for session switching
+
+### Backend Changes
+
+#### Data Model: Dual-PTY PiInstance
+
+```typescript
+interface PiInstance {
+  id: string;
+  pty: pty.IPty;               // pi process
+  shell: pty.IPty;             // bash shell
+  cwd: string;
+  wsClients: Set<WebSocket>;   // pi WS clients
+  shellClients: Set<WebSocket>; // shell WS clients
+  createdAt: number;
+  replayBuffer: string;        // pi replay buffer (64KB)
+  shellReplayBuffer: string;   // shell replay buffer (64KB)
+  sessionPath?: string;
+}
+```
+
+#### PTY Manager (`pty-manager.ts`)
+
+1. **Spawning**: `createPiInstance()` spawns both `pi` and `bash` (or `SHELL` env) in the same `cwd`, with identical initial size (120×30).
+2. **Data routing**: Each PTY has its own `onData` handler that writes to its own replay buffer and broadcasts to its own client set.
+3. **Exit handling**: When either PTY exits, kill the other PTY and broadcast exit to both client sets, then remove from `instances` Map.
+4. **WebSocket routing**: `attachWebSocket(id, ws, target)` where `target` is `"pi"` or `"shell"`. Same for `detachWebSocket`.
+5. **Input/Resize**: `sendInput(id, data, target)` and `resizeInstance(id, cols, rows, target)` route to the correct PTY.
+6. **Redraw**: `redrawInstance()` only applies to the pi PTY (SIGWINCH).
+7. **Kill**: `killInstance()` kills both PTYs unconditionally.
+8. **List**: `listInstances()` returns `{id, cwd, pid, shellPid, createdAt}`.
+
+#### WebSocket Server (`server.ts`)
+
+- Read `?target=pi|shell` query parameter (default `"pi"` for backward compatibility).
+- `attachWebSocket(instanceId, ws, target)`.
+- On connect: send the appropriate replay buffer (`replayBuffer` for pi, `shellReplayBuffer` for shell).
+- For pi reconnects (>5s old): prepend init sequence (`\x1b[?1049h\x1b[?1h\x1b[?7h`) to replay buffer.
+- For shell: no init sequence needed.
+- On `msg.type === "input"` or `"resize"`: route to the correct PTY via `target`.
+- SIGWINCH sent only for pi target.
+
+#### Session API (`session-api.ts`)
+
+- No changes to HTTP endpoints needed. `POST /api/instances` and `POST /api/sessions/:id/resume` still return `{id, cwd, pid}`. The shell is spawned internally.
+- `listInstances` may include `shellPid` in the response for completeness.
+
+### Frontend Changes
+
+#### State Model (`app.js`)
+
+```javascript
+// Sidebar selection: which instance's pi TUI is shown in the "pi" tab
+let selectedInstanceId = null;
+
+// Active tab: "pi" or "shell-<instanceId>"
+let activeTab = "pi";
+
+// Instance registry: each entry has both pi and shell subsystems
+const instances = new Map(); // id -> {
+//   cwd: string,
+//   pi: { ws, term, fitAddon, pane },
+//   shell: { ws, term, fitAddon, pane }
+// }
+```
+
+#### Tab Bar
+
+- **Static "pi" tab**: Always first, no close button. Clicking it sets `activeTab = "pi"`.
+- **Dynamic "Terminal" tabs**: One per active instance, added when `attachInstance()` is called. Label is exactly `"Terminal"`. No close button (lifecycle is coupled to the pi session). Clicking a Terminal tab sets `activeTab = "shell-<id>"`.
+- **Tab removal**: When `removeInstance(id)` is called, the Terminal tab for that id is removed.
+
+#### Pane Visibility
+
+The `#terminals` container holds both pi panes and shell panes. All are `position: absolute; inset: 0; display: none;`.
+
+`updateVisibility()`:
+1. Hide all panes (both pi and shell).
+2. If `activeTab === "pi"` and `selectedInstanceId` exists and `instances.has(selectedInstanceId)`: show `instances.get(selectedInstanceId).pi.pane`.
+3. If `activeTab` starts with `"shell-"`: extract id, show `instances.get(id).shell.pane`.
+4. Call `fitAddon.fit()` and `term.focus()` on the newly visible terminal.
+
+#### Sidebar Interaction
+
+- Clicking a sidebar instance item:
+  1. Sets `selectedInstanceId = id`.
+  2. If the instance is not yet in the registry, calls `attachInstance(id, cwd)`.
+  3. Sets `activeTab = "pi"`.
+  4. Calls `updateVisibility()`.
+  5. Closes mobile sidebar.
+- The sidebar's × (kill) button calls `removeInstance(id)` which kills both PTYs and removes the Terminal tab.
+
+#### `attachInstance(id, cwd)`
+
+1. If already in `instances`, return.
+2. Create **pi** subsystem: WS with `?target=pi`, xterm.js, fitAddon, `.terminal-pane` appended to `#terminals`.
+3. Create **shell** subsystem: WS with `?target=shell`, xterm.js, fitAddon, `.shell-pane` appended to `#terminals`.
+4. Both WS handlers call `term.reset()` on open, handle `data`/`exit`/`close` messages, and send `input`/`resize` from xterm.js.
+5. Add a "Terminal" tab for this instance.
+6. Register in `instances` Map.
+7. Set `selectedInstanceId = id` and `activeTab = "pi"`.
+8. Call `updateVisibility()`.
+
+#### `removeInstance(id)`
+
+1. Close both WS connections.
+2. Dispose both xterm.js terminals.
+3. Remove both DOM panes.
+4. Remove the Terminal tab.
+5. Delete from `instances` Map.
+6. If `selectedInstanceId === id`, set `selectedInstanceId` to the next remaining instance (or null).
+7. If `activeTab === "shell-<id>"`, fall back to `"pi"`.
+8. Call `updateVisibility()`.
+
+#### iOS Re-render
+
+- The visibilitychange handler checks `activeTab` and `selectedInstanceId` to determine which terminal to re-render.
+
+### CSS Changes (`style.css`)
+
+- `.pi-tab`: styling for the static "pi" tab (similar to `.tab`, but always present, no close button).
+- `.tab` continues to style Terminal tabs.
+- `.terminal-pane` continues to style pi panes.
+- `.shell-pane` styles shell panes (same absolute positioning as `.terminal-pane`).
+- The `#tabs` container can hold both `.pi-tab` and `.tab` elements.
+- Terminal tabs have no `.tab-close` element.
+
+### Lifecycle Diagram
+
+```
+User clicks "+" or "+ New session here"
+  │
+  ↓
+POST /api/instances {cwd}
+  │
+  ↓
+pty-manager.spawnPi(cwd)
+  ├── spawns pi PTY
+  └── spawns bash PTY in same cwd
+  │
+  ↓
+Frontend attachInstance(id, cwd)
+  ├── creates pi WS (?target=pi) + xterm.js + .terminal-pane
+  ├── creates shell WS (?target=shell) + xterm.js + .shell-pane
+  ├── adds "Terminal" tab
+  └── sets activeTab = "pi", selectedInstanceId = id
+  │
+  ↓
+User clicks sidebar instance X
+  ├── selectedInstanceId = X
+  ├── activeTab = "pi"
+  └── shows X's pi pane
+  │
+  ↓
+User clicks "Terminal" tab for instance Y
+  ├── activeTab = "shell-Y"
+  └── shows Y's shell pane
+  │
+  ↓
+User clicks sidebar × for instance X
+  ├── backend kills both pi and shell PTYs
+  ├── frontend removes both panes
+  ├── removes Terminal tab for X
+  └── if selectedInstanceId was X, pick next instance
+```
+
+### Reconnect Flow
+
+Both pi and shell support reconnect via their own replay buffers:
+- **Pi WS**: Server sends `replayBuffer` (with init sequence prepended for old instances). SIGWINCH sent.
+- **Shell WS**: Server sends `shellReplayBuffer`. No init sequence. No SIGWINCH.
+- Frontend `term.reset()` on open for both.
+
+### Error Handling
+- Pi PTY exit → kills shell PTY, broadcasts exit to both client sets, cleans up instance.
+- Shell PTY exit → kills pi PTY, same cleanup.
+- WS disconnect → remove client from the appropriate client set (pi or shell), PTY keeps running.
+- Invalid token → WS close(1008).
+- Missing instance or target → WS close(1008).
+
 ## File Explorer
 
 ### Data Flow

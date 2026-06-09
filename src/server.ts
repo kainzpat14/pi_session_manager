@@ -46,13 +46,19 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
+  const target = (url.searchParams.get("target") as "pi" | "shell") || "pi";
+  if (target !== "pi" && target !== "shell") {
+    ws.close(1008, "Invalid target");
+    return;
+  }
+
   const instance = PtyManager.getInstance(instanceId);
   if (!instance) {
     ws.close(1008, "Instance not found");
     return;
   }
 
-  PtyManager.attachWebSocket(instanceId, ws);
+  PtyManager.attachWebSocket(instanceId, ws, target);
 
   // Replay recent PTY output so new clients see current TUI state.
   // For reconnects (instance > 5s old), prepend a terminal init sequence
@@ -60,9 +66,10 @@ wss.on("connection", (ws, req) => {
   // application cursor keys, etc.) since the replay buffer window may have
   // missed the initial setup escape sequences.
   const isReconnect = Date.now() - instance.createdAt > 5000;
-  if (instance.replayBuffer) {
-    let data = instance.replayBuffer;
-    if (isReconnect) {
+  const buffer = target === "pi" ? instance.replayBuffer : instance.shellReplayBuffer;
+  if (buffer) {
+    let data = buffer;
+    if (isReconnect && target === "pi") {
       // Enter alternate screen + application cursor keys + normal wraparound.
       // This matches the state pi's TUI framework sets up on start.
       data = "\x1b[?1049h\x1b[?1h\x1b[?7h" + data;
@@ -71,15 +78,17 @@ wss.on("connection", (ws, req) => {
   }
 
   // Nudge pi to redraw its TUI (SIGWINCH may be lost during suspend)
-  PtyManager.redrawInstance(instanceId);
+  if (target === "pi") {
+    PtyManager.redrawInstance(instanceId);
+  }
 
   ws.on("message", (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
       if (msg.type === "input") {
-        PtyManager.sendInput(instanceId, msg.data);
+        PtyManager.sendInput(instanceId, msg.data, target);
       } else if (msg.type === "resize") {
-        PtyManager.resizeInstance(instanceId, msg.cols, msg.rows);
+        PtyManager.resizeInstance(instanceId, msg.cols, msg.rows, target);
       }
     } catch {
       // ignore malformed messages
@@ -87,7 +96,7 @@ wss.on("connection", (ws, req) => {
   });
 
   ws.on("close", () => {
-    PtyManager.detachWebSocket(instanceId, ws);
+    PtyManager.detachWebSocket(instanceId, ws, target);
   });
 });
 

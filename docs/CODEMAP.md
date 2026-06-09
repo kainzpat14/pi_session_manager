@@ -69,12 +69,15 @@ pi-web/
 // Backend
 interface PiInstance {
   id: string;
-  pty: IPty;
+  pty: IPty;               // pi process
+  shell: IPty;             // bash shell
   cwd: string;
-  wsClients: Set<WebSocket>;
+  wsClients: Set<WebSocket>;       // pi WS clients
+  shellClients: Set<WebSocket>;     // shell WS clients
   createdAt: number;
-  replayBuffer: string;   // rolling 64KB of recent PTY output
-  sessionPath?: string;   // set for resumed sessions
+  replayBuffer: string;             // pi replay buffer (64KB)
+  shellReplayBuffer: string;        // shell replay buffer (64KB)
+  sessionPath?: string;             // set for resumed sessions
 }
 
 interface SessionEntry {
@@ -88,12 +91,24 @@ interface SessionEntry {
 
 // Frontend (Map)
 instances: Map<string, {
-  ws: WebSocket;
-  term: Terminal;
-  fitAddon: FitAddon;
   cwd: string;
-  pane: HTMLDivElement;
+  pi: {
+    ws: WebSocket;
+    term: Terminal;
+    fitAddon: FitAddon;
+    pane: HTMLDivElement;
+  };
+  shell: {
+    ws: WebSocket;
+    term: Terminal;
+    fitAddon: FitAddon;
+    pane: HTMLDivElement;
+  };
 }>
+
+// Frontend state
+selectedInstanceId: string | null;  // sidebar selection
+activeTab: string;                   // "pi" or "shell-<id>"
 ```
 
 ## API Endpoints
@@ -115,7 +130,10 @@ instances: Map<string, {
 ## WebSocket Protocol
 
 ```typescript
-// Server → Client (on connect, replayBuffer is sent first, then live data)
+// Connection URL: /ws?instance=<id>&token=<t>&target=pi|shell
+// Default target is "pi" for backward compatibility.
+
+// Server → Client (on connect, appropriate replayBuffer is sent first, then live data)
 { type: "data", instanceId: string, data: string }
 { type: "exit", instanceId: string, exitCode?: number, signal?: number }
 
