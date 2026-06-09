@@ -66,6 +66,10 @@ html, body, #app {
     display: flex;
   }
 
+  #tabs {
+    padding-left: 56px;
+  }
+
   #sidebar {
     position: fixed;
     top: 0;
