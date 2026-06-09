@@ -147,11 +147,34 @@ html, body, #app {
   color: white;
 }
 
+.instance-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.instance-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .instance-cwd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 160px;
+}
+
+.instance-cwd:only-child {
+  color: inherit;
+  font-size: 0.85rem;
+}
+
+.instance-name + .instance-cwd {
+  color: #8b949e;
+  font-size: 0.75rem;
 }
 
 .instance-close {
@@ -233,11 +256,24 @@ html, body, #app {
   margin-bottom: 2px;
 }
 
+.history-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .history-cwd {
   font-size: 0.8rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.history-name + .history-cwd {
+  color: #8b949e;
+  font-size: 0.75rem;
 }
 
 .history-actions {

@@ -99,8 +99,9 @@ Mobile (<768px):  sidebar hidden, translateX(-100%)
 ```
 
 1. Read first line → JSON parse header (contains `id`, `timestamp`, `cwd`)
-2. Sort by timestamp descending
-3. Return: `{id, timestamp, cwd, path, size, lines}`
+2. Scan remaining lines for `session_info` records to extract the session `name`
+3. Sort by timestamp descending
+4. Return: `{id, timestamp, cwd, path, size, lines, name?}`
 
 ### External Active Session Detection
 
@@ -173,6 +174,7 @@ interface PiInstance {
   replayBuffer: string;        // pi replay buffer (64KB)
   shellReplayBuffer: string;   // shell replay buffer (64KB)
   sessionPath?: string;
+  name?: string;               // from session JSONL header if available
 }
 ```
 
@@ -185,7 +187,7 @@ interface PiInstance {
 5. **Input/Resize**: `sendInput(id, data, target)` and `resizeInstance(id, cols, rows, target)` route to the correct PTY.
 6. **Redraw**: `redrawInstance()` only applies to the pi PTY (SIGWINCH).
 7. **Kill**: `killInstance()` kills both PTYs unconditionally.
-8. **List**: `listInstances()` returns `{id, cwd, pid, shellPid, createdAt}`.
+8. **List**: `listInstances()` returns `{id, cwd, pid, shellPid, createdAt, name?}`. For resumed sessions, the name is read from the `session_info` record in the session JSONL file. For fresh sessions, the name is resolved by scanning the most recent session file in the instance's cwd.
 
 #### WebSocket Server (`server.ts`)
 
@@ -200,7 +202,7 @@ interface PiInstance {
 #### Session API (`session-api.ts`)
 
 - No changes to HTTP endpoints needed. `POST /api/instances` and `POST /api/sessions/:id/resume` still return `{id, cwd, pid}`. The shell is spawned internally.
-- `listInstances` may include `shellPid` in the response for completeness.
+- `listInstances` may include `shellPid` and `name` in the response for completeness.
 
 ### Frontend Changes
 

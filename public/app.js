@@ -80,11 +80,23 @@ function renderInstanceList(list) {
     const li = document.createElement("li");
     if (item.id === selectedInstanceId) li.classList.add("active");
 
+    const info = document.createElement("div");
+    info.className = "instance-info";
+
+    if (item.name) {
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "instance-name";
+      nameSpan.textContent = item.name;
+      nameSpan.title = item.cwd;
+      info.appendChild(nameSpan);
+    }
+
     const cwdSpan = document.createElement("span");
     cwdSpan.className = "instance-cwd";
     cwdSpan.textContent = item.cwd;
     cwdSpan.title = item.cwd;
-    li.appendChild(cwdSpan);
+    info.appendChild(cwdSpan);
+    li.appendChild(info);
 
     const close = document.createElement("span");
     close.className = "instance-close";
@@ -406,6 +418,14 @@ function renderHistory(sessions) {
     meta.className = "history-meta";
     meta.innerHTML = `<span class="history-date">${formatDate(s.timestamp)}</span>`;
     li.appendChild(meta);
+
+    if (s.name) {
+      const name = document.createElement("div");
+      name.className = "history-name";
+      name.textContent = s.name;
+      name.title = s.cwd;
+      li.appendChild(name);
+    }
 
     const cwd = document.createElement("div");
     cwd.className = "history-cwd";

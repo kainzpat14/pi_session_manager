@@ -1,5 +1,7 @@
+import { readFileSync } from "fs";
 import * as pty from "node-pty";
 import type { WebSocket } from "ws";
+import { findSessionNameByCwd } from "./session-store";
 
 export interface PiInstance {
   id: string;
@@ -12,6 +14,7 @@ export interface PiInstance {
   replayBuffer: string;
   shellReplayBuffer: string;
   sessionPath?: string;
+  name?: string;
 }
 
 const instances = new Map<string, PiInstance>();
@@ -129,6 +132,26 @@ export function spawnPiWithSession(sessionPath: string, cwd?: string): PiInstanc
   const shell = spawnShell(resolvedCwd);
   const inst = createPiInstance(proc, shell, resolvedCwd);
   inst.sessionPath = sessionPath;
+
+  // Read session name from the JSONL file (session_info record)
+  try {
+    const content = readFileSync(sessionPath, "utf-8");
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const record = JSON.parse(line);
+        if (record.type === "session_info" && record.name) {
+          inst.name = record.name;
+          break;
+        }
+      } catch {
+        // ignore malformed line
+      }
+    }
+  } catch {
+    // ignore malformed or missing file
+  }
+
   return inst;
 }
 
@@ -142,14 +165,19 @@ export function listInstances(): Array<{
   pid: number;
   shellPid: number;
   createdAt: number;
+  name?: string;
 }> {
-  return Array.from(instances.values()).map((i) => ({
-    id: i.id,
-    cwd: i.cwd,
-    pid: i.pty.pid,
-    shellPid: i.shell.pid,
-    createdAt: i.createdAt,
-  }));
+  return Array.from(instances.values()).map((i) => {
+    const name = i.name ?? findSessionNameByCwd(i.cwd);
+    return {
+      id: i.id,
+      cwd: i.cwd,
+      pid: i.pty.pid,
+      shellPid: i.shell.pid,
+      createdAt: i.createdAt,
+      name,
+    };
+  });
 }
 
 export function killInstance(id: string): boolean {

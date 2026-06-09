@@ -4,6 +4,46 @@ import { homedir } from "os";
 
 const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
 
+function getSessionNameFromFile(filePath: string): string | undefined {
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    for (const line of content.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const record = JSON.parse(line);
+        if (record.type === "session_info" && record.name) {
+          return record.name;
+        }
+      } catch {
+        // ignore malformed line
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+  return undefined;
+}
+
+export function findSessionNameByCwd(cwd: string): string | undefined {
+  const encoded = encodeCwd(cwd);
+  const dirPath = join(SESSIONS_DIR, encoded);
+  if (!existsSync(dirPath)) return undefined;
+
+  let latestFile: string | undefined;
+  let latestTime = 0;
+  for (const fileName of readdirSync(dirPath)) {
+    if (!fileName.endsWith(".jsonl")) continue;
+    const filePath = join(dirPath, fileName);
+    const stat = statSync(filePath);
+    if (stat.mtimeMs > latestTime) {
+      latestTime = stat.mtimeMs;
+      latestFile = filePath;
+    }
+  }
+
+  return latestFile ? getSessionNameFromFile(latestFile) : undefined;
+}
+
 export interface SessionEntry {
   id: string;
   timestamp: string;
@@ -11,6 +51,7 @@ export interface SessionEntry {
   path: string;
   size: number;
   lines: number;
+  name?: string;
 }
 
 function decodeCwd(dirName: string): string {
@@ -80,19 +121,28 @@ export function listSessions(excludePaths?: Set<string>, piWebPids?: Set<number>
       if (excludePaths?.has(filePath)) continue;
 
       let header: any = {};
-      try {
-        const firstLine = readFileSync(filePath, "utf-8").split("\n")[0];
-        if (firstLine) header = JSON.parse(firstLine);
-      } catch {
-        // ignore malformed
-      }
-
       let lines = 0;
+      let name: string | undefined;
       try {
         const content = readFileSync(filePath, "utf-8");
-        lines = content.split("\n").filter(Boolean).length;
+        const allLines = content.split("\n");
+        lines = allLines.filter(Boolean).length;
+        const firstLine = allLines[0];
+        if (firstLine) header = JSON.parse(firstLine);
+        for (const line of allLines) {
+          if (!line.trim()) continue;
+          try {
+            const record = JSON.parse(line);
+            if (record.type === "session_info" && record.name) {
+              name = record.name;
+              break;
+            }
+          } catch {
+            // ignore malformed line
+          }
+        }
       } catch {
-        // ignore
+        // ignore malformed
       }
 
       entries.push({
@@ -102,6 +152,7 @@ export function listSessions(excludePaths?: Set<string>, piWebPids?: Set<number>
         path: filePath,
         size: fileStat.size,
         lines,
+        name,
       });
     }
   }

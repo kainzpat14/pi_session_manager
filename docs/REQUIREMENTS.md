@@ -47,8 +47,16 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Resume preserves original cwd from session JSON header
 - [x] Delete past session files permanently
 
+### Session Naming
+- [x] Read `name` field from `session_info` records in session JSONL files
+- [x] Display session name in history list when available
+- [x] Display session name in active instances list when available
+- [x] For active instances, scan the most recent session file in the instance's cwd
+- [x] Fall back to showing cwd when no name is present
+
 ### History Display
 - [x] Show complete working directory path (not truncated to basename)
+- [x] Show session name if available (above cwd)
 - [x] Show session timestamp
 - [x] Do not show message count or file size
 - [x] Resume button: ▶ (play icon)
