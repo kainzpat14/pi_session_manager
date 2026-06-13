@@ -145,7 +145,7 @@ async function attachInstance(id, cwd) {
 
   // Create pi subsystem
   const piWs = new WebSocket(
-    `ws://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}&target=pi`
+    `wss://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}&target=pi`
   );
   const piTerm = new Terminal({
     fontSize: 14,
@@ -212,7 +212,7 @@ async function attachInstance(id, cwd) {
 
   // Create shell subsystem
   const shellWs = new WebSocket(
-    `ws://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}&target=shell`
+    `wss://${location.host}/ws?instance=${id}&token=${encodeURIComponent(token)}&target=shell`
   );
   const shellTerm = new Terminal({
     fontSize: 14,

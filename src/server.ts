@@ -1,5 +1,6 @@
 import express from "express";
-import { createServer } from "http";
+import { createServer } from "https";
+import { readFileSync } from "fs";
 import { WebSocketServer } from "ws";
 import { join } from "path";
 import { loadConfig, getConfigPath } from "./config";
@@ -7,7 +8,10 @@ import * as PtyManager from "./pty-manager";
 import sessionApi from "./session-api";
 
 const app = express();
-const server = createServer(app);
+const server = createServer({
+  key: readFileSync(join(__dirname, "../certs/key.pem")),
+  cert: readFileSync(join(__dirname, "../certs/cert.pem")),
+}, app);
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 app.use(express.json());
@@ -91,7 +95,7 @@ wss.on("connection", (ws, req) => {
 
 const config = loadConfig();
 server.listen(config.port, () => {
-  console.log(`pi-web listening on http://localhost:${config.port}`);
+  console.log(`pi-web listening on https://localhost:${config.port}`);
   console.log(`Config: ${getConfigPath()}`);
   console.log(`Token: ${config.token}`);
 });
