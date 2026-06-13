@@ -45,13 +45,14 @@ process.on('SIGTERM', () => {
 process.stdin.on('data', (data) => {
   if (!running) return;
   const str = data.toString();
+  let shouldDraw = true;
   for (const ch of str) {
     const code = ch.charCodeAt(0);
     if (code === 3) {          // Ctrl+C
       process.stdout.write('\n');
       process.exit(0);
     }
-    if (code === 13) {         // Enter
+    if (code === 13 || code === 10) {         // Enter (CR or LF)
       const cmd = promptBuffer.trim();
       promptBuffer = '';
       process.stdout.write('\n');
@@ -67,6 +68,7 @@ process.stdin.on('data', (data) => {
         process.stdout.write(`echo: ${cmd}\n`);
       }
       emitPrompt();
+      shouldDraw = false;
       continue;
     }
     if (code === 127) {        // Backspace
@@ -81,7 +83,7 @@ process.stdin.on('data', (data) => {
   }
   // Redraw with current buffer on cursor area
   // For simplicity, we just redraw after each keystroke
-  draw();
+  if (shouldDraw) draw();
 });
 
 // Initial draw

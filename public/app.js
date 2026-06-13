@@ -627,6 +627,27 @@ function initApp() {
   setInterval(refreshHistory, 10000);
 }
 
+/* ---------- Test hooks ---------- */
+
+if (typeof window !== "undefined") {
+  window._piWeb = {
+    get instances() { return instances; },
+    get selectedInstanceId() { return selectedInstanceId; },
+    get activeTab() { return activeTab; },
+    getTerminalText(target = "pi") {
+      const entry = instances.get(selectedInstanceId);
+      if (!entry) return "";
+      const term = target === "pi" ? entry.pi.term : entry.shell.term;
+      const lines = [];
+      for (let i = 0; i < term.rows; i++) {
+        const line = term.buffer.active.getLine(i);
+        lines.push(line ? line.translateToString() : "");
+      }
+      return lines.join("\n");
+    },
+  };
+}
+
 /* ---------- Event listeners ---------- */
 
 if (token) {

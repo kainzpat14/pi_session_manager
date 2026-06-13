@@ -2,7 +2,8 @@ import { readdirSync, statSync, readFileSync, unlinkSync, existsSync, readlinkSy
 import { join, basename } from "path";
 import { homedir } from "os";
 
-const SESSIONS_DIR = join(homedir(), ".pi", "agent", "sessions");
+const AGENT_DIR = process.env.PI_WEB_AGENT_DIR || join(homedir(), ".pi", "agent");
+const SESSIONS_DIR = join(AGENT_DIR, "sessions");
 
 function getSessionNameFromFile(filePath: string): string | undefined {
   try {

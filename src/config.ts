@@ -9,7 +9,9 @@ export interface WebConfig {
 }
 
 const CONFIG_DIR = join(homedir(), ".pi", "agent");
-const CONFIG_PATH = join(CONFIG_DIR, "web-config.json");
+const CONFIG_PATH = process.env.PI_WEB_CONFIG_PATH
+  ? process.env.PI_WEB_CONFIG_PATH
+  : join(CONFIG_DIR, "web-config.json");
 
 function generateToken(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
