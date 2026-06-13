@@ -2,6 +2,27 @@ import { Page } from '@playwright/test';
 
 export const TEST_TOKEN = 'test-token-for-playwright';
 
+export async function cleanupInstances(page: Page): Promise<void> {
+  // Fetch all active instances and kill them
+  const res = await page.evaluate(async () => {
+    const token = localStorage.getItem('pi-web-token') || '';
+    const r = await fetch('/api/instances', {
+      headers: { 'X-Pi-Token': token },
+    });
+    if (!r.ok) return { error: await r.text() };
+    const list = await r.json();
+    for (const inst of list) {
+      await fetch(`/api/instances/${inst.id}/kill`, {
+        method: 'POST',
+        headers: { 'X-Pi-Token': token },
+      });
+    }
+    return { count: list.length };
+  });
+  // Small delay to let kill handlers propagate
+  await page.waitForTimeout(300);
+}
+
 export async function login(page: Page): Promise<void> {
   await page.goto('/');
   await page.fill('#token-input', TEST_TOKEN);

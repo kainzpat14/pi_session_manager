@@ -542,6 +542,244 @@ html, body, #app {
   display: block;
 }
 
+/* Session folder groups */
+#session-list {
+  list-style: none;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.session-folder {
+  border-bottom: 1px solid #21262d;
+}
+
+.session-folder:last-child {
+  border-bottom: none;
+}
+
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  user-select: none;
+}
+
+.folder-header:hover {
+  background: #21262d;
+  border-radius: 4px;
+}
+
+.folder-header.active-folder {
+  border-left: 3px solid #238636;
+  padding-left: 3px;
+}
+
+.folder-chevron {
+  font-size: 0.65rem;
+  color: #8b949e;
+  transition: transform 0.2s ease;
+  width: 12px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.folder-header.expanded .folder-chevron {
+  transform: rotate(90deg);
+}
+
+.folder-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-badge {
+  font-size: 0.7rem;
+  color: #8b949e;
+  flex-shrink: 0;
+  background: #21262d;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.folder-content {
+  padding-left: 18px;
+  padding-bottom: 6px;
+}
+
+.folder-content.collapsed {
+  display: none;
+}
+
+.session-instance {
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.session-instance:hover {
+  background: #21262d;
+}
+
+.session-instance.active {
+  background: #1f6feb;
+  color: white;
+}
+
+.session-instance .instance-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-instance .instance-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-instance .instance-cwd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8b949e;
+  font-size: 0.75rem;
+}
+
+.session-instance.active .instance-cwd {
+  color: rgba(255,255,255,0.7);
+}
+
+.session-instance .instance-close {
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 0.75rem;
+  margin-left: 4px;
+}
+
+.session-instance .instance-close:hover {
+  opacity: 1;
+  color: #f85149;
+}
+
+.session-instance.active .instance-close:hover {
+  color: #fff;
+}
+
+.session-history {
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  position: relative;
+}
+
+.session-history:hover {
+  background: #21262d;
+}
+
+.session-history .history-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: #8b949e;
+  margin-bottom: 2px;
+}
+
+.session-history .history-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-history .history-cwd {
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8b949e;
+}
+
+.session-history .history-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.session-history .history-actions button {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-history .history-actions button:hover {
+  background: #30363d;
+}
+
+.show-more-btn {
+  display: block;
+  width: 100%;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 4px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+}
+
+.show-more-btn:hover {
+  background: #21262d;
+  color: #c9d1d9;
+}
+
+.show-more-btn.hidden {
+  display: none;
+}
+
+.folder-empty {
+  font-size: 0.8rem;
+  color: #8b949e;
+  padding: 8px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .session-instance .history-actions button,
+  .session-history .history-actions button {
+    min-height: 44px;
+    min-width: 48px;
+    padding: 8px 14px;
+    font-size: 1rem;
+  }
+}
+
 /* Login overlay */
 #login-overlay {
   position: fixed;

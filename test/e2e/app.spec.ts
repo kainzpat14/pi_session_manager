@@ -9,9 +9,14 @@ import {
   typeInTerminal,
   sendTerminalInput,
   pressEnter,
+  cleanupInstances,
 } from './helpers';
 
 test.describe('pi-web e2e', () => {
+  test.afterEach(async ({ page }) => {
+    await cleanupInstances(page);
+  });
+
   test('login page shows token input and connects', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#login-overlay')).toBeVisible();
@@ -25,22 +30,21 @@ test.describe('pi-web e2e', () => {
   test('sidebar shows empty state on fresh login', async ({ page }) => {
     await login(page);
     // Sidebar should render even with 0 items
-    await expect(page.locator('#instance-list')).toBeAttached();
-    await expect(page.locator('#history-list')).toBeVisible();
+    await expect(page.locator('#session-list')).toBeAttached();
     await expect(page.locator('#fs-list')).toBeVisible();
     // Status text should reflect current count
-    const count = await page.locator('#instance-list li').count();
+    const count = await page.locator('.session-instance').count();
     await expect(page.locator('#status-text')).toHaveText(`${count} active`);
   });
 
   test('creates new instance via + button and shows mock pi TUI', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
 
     await page.click('#new-session-btn');
 
     // Wait for instance to appear in sidebar
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
     await expect(page.locator('#status-text')).toHaveText(`${countBefore + 1} active`);
 
     // Wait for terminal to show mock pi output
@@ -55,9 +59,9 @@ test.describe('pi-web e2e', () => {
 
   test('sends input to mock pi and sees echo output', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
     // Wait for prompt to be ready
     await waitForTerminalText(page, 'pi', (t) => t.includes('MOCK PI'), 5000);
@@ -77,9 +81,9 @@ test.describe('pi-web e2e', () => {
 
   test('switches to shell tab and shows bash prompt', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
     // Wait for pi tab to be active
     await expect(page.locator('#pi-tab')).toHaveClass(/active/);
@@ -98,9 +102,9 @@ test.describe('pi-web e2e', () => {
 
   test('switches back to pi tab', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
     await page.click('.tab.shell-tab');
     await expect(page.locator('.tab.shell-tab')).toHaveClass(/active/);
@@ -112,12 +116,13 @@ test.describe('pi-web e2e', () => {
 
   test('kills instance via sidebar × button', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
-    await page.locator('.instance-close').last().click();
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore);
+    // Click the newest instance in the first folder (auto-expanded by createInstance)
+    await page.locator('.session-folder').first().locator('.session-instance .instance-close').last().click();
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore);
     await expect(page.locator('#status-text')).toHaveText(`${countBefore} active`);
   });
 
@@ -145,7 +150,7 @@ test.describe('pi-web e2e', () => {
 
   test('creates instance from file explorer + New session here', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
 
     // Navigate to a subdirectory if available
     const dirs = page.locator('#fs-list .fs-item.dir');
@@ -155,11 +160,13 @@ test.describe('pi-web e2e', () => {
     }
 
     const currentPath = await page.locator('#fs-breadcrumb').textContent();
+    const expectedPath = currentPath?.replace('↑ ', '') || '/home/dev';
     await page.click('.fs-create-btn');
 
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
-    const cwdText = await page.locator('.instance-cwd').last().textContent();
-    expect(cwdText).toContain(currentPath?.replace('↑ ', '') || '/home/dev');
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
+    // With grouped folders, the new instance may not be the last globally; locate it by path
+    const cwdLocator = page.locator('.session-instance .instance-cwd').filter({ hasText: expectedPath });
+    await expect(cwdLocator).toHaveCount(1);
   });
 
   test('mobile sidebar toggle works', async ({ page }) => {
@@ -185,32 +192,32 @@ test.describe('pi-web e2e', () => {
 
   test('clicking sidebar instance selects it and shows pi tab', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
     // Click shell tab first
     await page.click('.tab.shell-tab');
     await expect(page.locator('.tab.shell-tab')).toHaveClass(/active/);
 
-    // Click sidebar instance
-    await page.locator('#instance-list li').last().click();
+    // Click the newest instance in the first folder (auto-expanded by createInstance)
+    await page.locator('.session-folder').first().locator('.session-instance').last().click();
     await expect(page.locator('#pi-tab')).toHaveClass(/active/);
     await expect(page.locator('.tab.shell-tab')).not.toHaveClass(/active/);
   });
 
   test('multiple instances can be created and selected', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
 
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 2);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 2);
 
-    // Click the last instance
-    const items = page.locator('#instance-list li');
+    // Click the newest instance in the first folder (auto-expanded by createInstance)
+    const items = page.locator('.session-folder').first().locator('.session-instance');
     await items.last().click();
 
     await expect(page.locator('#pi-tab')).toHaveClass(/active/);
@@ -219,16 +226,17 @@ test.describe('pi-web e2e', () => {
 
   test('instance is removed from map when killed', async ({ page }) => {
     await login(page);
-    const countBefore = await page.locator('#instance-list li').count();
+    const countBefore = await page.locator('.session-instance').count();
     await page.click('#new-session-btn');
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore + 1);
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore + 1);
 
     // Verify the new instance is attached in the frontend map
     const countBeforeMap = await getInstanceCount(page);
     expect(countBeforeMap).toBeGreaterThanOrEqual(1);
 
-    await page.locator('.instance-close').last().click();
-    await expect(page.locator('#instance-list li')).toHaveCount(countBefore);
+    // Click the newest instance in the first folder (auto-expanded by createInstance)
+    await page.locator('.session-folder').first().locator('.session-instance .instance-close').last().click();
+    await expect(page.locator('.session-instance')).toHaveCount(countBefore);
 
     // After killing, the map should have one fewer than before
     const countAfter = await getInstanceCount(page);
@@ -237,8 +245,8 @@ test.describe('pi-web e2e', () => {
 
   test('history list shows past sessions', async ({ page }) => {
     await login(page);
-    // The history section is always visible
-    await expect(page.locator('#history-list')).toBeVisible();
+    // The session list is always visible
+    await expect(page.locator('#session-list')).toBeVisible();
   });
 
   test('terminal pane is visible after creating instance', async ({ page }) => {

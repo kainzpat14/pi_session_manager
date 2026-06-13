@@ -255,21 +255,18 @@ describe("session-store", () => {
   });
 
   describe("listSessions with external active dir filtering", () => {
-    it("skips directories with external pi processes", () => {
+    it("returns sessions even with external pi processes", () => {
       const encodedDir = "--home-dev--";
       const dirPath = join(SESSIONS_DIR, encodedDir);
       const fileName = "20240101_120000_abc123.jsonl";
 
-      // Mock /proc entries
       mockedExistsSync.mockImplementation((p: any) => {
-        if (typeof p === "string" && p.startsWith("/proc")) return true;
         if (p === SESSIONS_DIR) return true;
         return true;
       });
       mockedReaddirSync.mockImplementation((p: any) => {
         if (p === SESSIONS_DIR) return [encodedDir] as any;
         if (p === dirPath) return [fileName] as any;
-        if (p === "/proc") return ["1234", "5678"] as any;
         return [] as any;
       });
       mockedStatSync.mockImplementation((p: any) => {
@@ -278,23 +275,14 @@ describe("session-store", () => {
         return { isDirectory: () => true } as any;
       });
       mockedReadFileSync.mockImplementation((p: any) => {
-        if (typeof p === "string" && p.includes("/proc/1234/cmdline")) return "node pi";
-        if (typeof p === "string" && p.includes("/proc/1234/exe")) return "/usr/bin/node";
-        if (typeof p === "string" && p.includes("/proc/1234/cwd")) return "/home/dev";
-        if (typeof p === "string" && p.includes("/proc/5678/cmdline")) return "other";
-        if (typeof p === "string" && p.includes("/proc/5678/exe")) return "/usr/bin/other";
         return "{}\n";
       });
-      mockedReadlinkSync.mockImplementation((p: any) => {
-        if (typeof p === "string" && p.includes("/proc/1234/exe")) return "/usr/bin/node";
-        if (typeof p === "string" && p.includes("/proc/1234/cwd")) return "/home/dev";
-        return "";
-      });
 
-      // piWebPids is empty, so 1234 is external → /home-dev-- is skipped
+      // listSessions no longer skips directories with external pi processes
       const piWebPids = new Set<number>();
       const sessions = listSessions(undefined, piWebPids);
-      expect(sessions).toHaveLength(0);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].id).toBe("abc123");
     });
   });
 });

@@ -7,9 +7,8 @@ const debugLog = document.getElementById("debug-log");
 const loginOverlay = document.getElementById("login-overlay");
 const tokenInput = document.getElementById("token-input");
 const loginBtn = document.getElementById("login-btn");
-const instanceList = document.getElementById("instance-list");
+const sessionList = document.getElementById("session-list");
 const statusText = document.getElementById("status-text");
-const historyList = document.getElementById("history-list");
 const fsList = document.getElementById("fs-list");
 const fsBreadcrumb = document.getElementById("fs-breadcrumb");
 const menuToggle = document.getElementById("menu-toggle");
@@ -27,8 +26,12 @@ let token = localStorage.getItem("pi-web-token") || "";
 let selectedInstanceId = null;   // sidebar selection
 let activeTab = "pi";            // "pi" or "shell"
 const instances = new Map();     // id -> { cwd, pi: {...}, shell: {...} }
+let activeInstances = [];        // from API /instances
+let historySessions = [];        // from API /sessions
 let fsCurrentPath = "/home/dev";
 let scrollLockActive = true;
+let folderExpandedState = new Map(); // cwd -> boolean
+let folderShowAllHistory = new Map(); // cwd -> boolean
 
 /* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
@@ -65,73 +68,266 @@ async function api(method, path, body) {
   return res.json();
 }
 
-/* ---------- Instance list ---------- */
+/* ---------- Session grouping ---------- */
+
+function getFolderName(cwd) {
+  const parts = cwd.replace(/\/$/, "").split("/");
+  return parts[parts.length - 1] || cwd;
+}
+
+function formatDate(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
 
 async function refreshInstanceList() {
   try {
     const list = await api("GET", "/instances");
-    renderInstanceList(list);
+    activeInstances = list;
     if (statusText) statusText.textContent = `${list.length} active`;
+    renderSessionGroups();
   } catch (e) {
     if (statusText) statusText.textContent = "Error";
   }
 }
 
-function renderInstanceList(list) {
-  if (!instanceList) return;
-  instanceList.innerHTML = "";
-  for (const item of list) {
-    const li = document.createElement("li");
-    if (item.id === selectedInstanceId) li.classList.add("active");
+async function refreshHistory() {
+  try {
+    const sessions = await api("GET", "/sessions");
+    historySessions = sessions;
+    renderSessionGroups();
+  } catch (e) {
+    if (sessionList) {
+      // keep existing rendering, just note the error in status
+    }
+  }
+}
 
-    const info = document.createElement("div");
-    info.className = "instance-info";
+function renderSessionGroups() {
+  if (!sessionList) return;
+  sessionList.innerHTML = "";
 
-    if (item.name) {
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "instance-name";
-      nameSpan.textContent = item.name;
-      nameSpan.title = item.cwd;
-      info.appendChild(nameSpan);
+  // Group by cwd
+  const folderMap = new Map();
+
+  for (const inst of activeInstances) {
+    if (!folderMap.has(inst.cwd)) {
+      folderMap.set(inst.cwd, { active: [], history: [] });
+    }
+    folderMap.get(inst.cwd).active.push(inst);
+  }
+
+  for (const s of historySessions) {
+    if (!folderMap.has(s.cwd)) {
+      folderMap.set(s.cwd, { active: [], history: [] });
+    }
+    folderMap.get(s.cwd).history.push(s);
+  }
+
+  if (folderMap.size === 0) {
+    sessionList.innerHTML = "<li class='folder-empty'>No sessions</li>";
+    return;
+  }
+
+  // Sort folders: active first, then by most recent date
+  const folders = Array.from(folderMap.entries()).map(([cwd, data]) => {
+    const historySorted = data.history.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    const hasActive = data.active.length > 0;
+    const lastActiveDate = data.active.length > 0
+      ? Math.max(...data.active.map(i => i.createdAt || 0))
+      : 0;
+    const lastHistoryDate = historySorted.length > 0
+      ? new Date(historySorted[0].timestamp).getTime()
+      : 0;
+    const lastDate = Math.max(lastActiveDate, lastHistoryDate);
+    return { cwd, active: data.active, history: historySorted, hasActive, lastDate };
+  });
+
+  folders.sort((a, b) => {
+    if (a.hasActive !== b.hasActive) return b.hasActive ? 1 : -1;
+    return b.lastDate - a.lastDate;
+  });
+
+  for (const folder of folders) {
+    const folderEl = document.createElement("li");
+    folderEl.className = "session-folder";
+
+    const isExpanded = folderExpandedState.get(folder.cwd) ?? false;
+    const showAll = folderShowAllHistory.get(folder.cwd) ?? false;
+
+    const header = document.createElement("div");
+    header.className = "folder-header" + (isExpanded ? " expanded" : "");
+    if (folder.hasActive) header.classList.add("active-folder");
+
+    const chevron = document.createElement("span");
+    chevron.className = "folder-chevron";
+    chevron.textContent = "▶";
+    header.appendChild(chevron);
+
+    const name = document.createElement("span");
+    name.className = "folder-name";
+    name.textContent = getFolderName(folder.cwd);
+    name.title = folder.cwd;
+    header.appendChild(name);
+
+    const badge = document.createElement("span");
+    badge.className = "folder-badge";
+    const parts = [];
+    if (folder.active.length > 0) parts.push(`${folder.active.length} active`);
+    const histCount = folder.history.length;
+    if (histCount > 0) parts.push(`${histCount} history`);
+    badge.textContent = parts.join(", ");
+    header.appendChild(badge);
+
+    header.addEventListener("click", () => {
+      folderExpandedState.set(folder.cwd, !isExpanded);
+      renderSessionGroups();
+    });
+
+    folderEl.appendChild(header);
+
+    const content = document.createElement("div");
+    content.className = "folder-content" + (isExpanded ? "" : " collapsed");
+
+    // Active instances
+    for (const item of folder.active) {
+      const li = document.createElement("div");
+      li.className = "session-instance";
+      if (item.id === selectedInstanceId) li.classList.add("active");
+
+      const info = document.createElement("div");
+      info.className = "instance-info";
+
+      if (item.name) {
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "instance-name";
+        nameSpan.textContent = item.name;
+        nameSpan.title = item.cwd;
+        info.appendChild(nameSpan);
+      }
+
+      const cwdSpan = document.createElement("span");
+      cwdSpan.className = "instance-cwd";
+      cwdSpan.textContent = item.cwd;
+      cwdSpan.title = item.cwd;
+      info.appendChild(cwdSpan);
+      li.appendChild(info);
+
+      const close = document.createElement("span");
+      close.className = "instance-close";
+      close.textContent = "×";
+      close.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await api("POST", `/instances/${item.id}/kill`);
+        removeInstance(item.id);
+        refreshInstanceList();
+      });
+      li.appendChild(close);
+
+      li.addEventListener("click", async () => {
+        closeSidebar();
+        selectedInstanceId = item.id;
+        if (!instances.has(item.id)) {
+          await attachInstance(item.id, item.cwd);
+        } else {
+          activeTab = "pi";
+          updateVisibility();
+        }
+        refreshInstanceList();
+      });
+
+      content.appendChild(li);
     }
 
-    const cwdSpan = document.createElement("span");
-    cwdSpan.className = "instance-cwd";
-    cwdSpan.textContent = item.cwd;
-    cwdSpan.title = item.cwd;
-    info.appendChild(cwdSpan);
-    li.appendChild(info);
+    // History sessions
+    const lastHistory = folder.history[0];
+    const olderHistory = folder.history.slice(1);
 
-    const close = document.createElement("span");
-    close.className = "instance-close";
-    close.textContent = "×";
-    close.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await api("POST", `/instances/${item.id}/kill`);
-      removeInstance(item.id);
-      refreshInstanceList();
-    });
-    li.appendChild(close);
+    if (lastHistory) {
+      content.appendChild(renderHistoryItem(lastHistory));
+    }
 
-    li.addEventListener("click", async () => {
-      closeSidebar();
-      selectedInstanceId = item.id;
-      if (!instances.has(item.id)) {
-        await attachInstance(item.id, item.cwd);
-      } else {
-        activeTab = "pi";
-        updateVisibility();
+    if (olderHistory.length > 0 && !showAll) {
+      const showMore = document.createElement("button");
+      showMore.className = "show-more-btn";
+      showMore.textContent = `... ${olderHistory.length} more`;
+      showMore.addEventListener("click", (e) => {
+        e.stopPropagation();
+        folderShowAllHistory.set(folder.cwd, true);
+        renderSessionGroups();
+      });
+      content.appendChild(showMore);
+    }
+
+    if (showAll) {
+      for (const s of olderHistory) {
+        content.appendChild(renderHistoryItem(s));
       }
-      refreshInstanceList();
-    });
-    instanceList.appendChild(li);
+    }
+
+    folderEl.appendChild(content);
+    sessionList.appendChild(folderEl);
   }
+}
+
+function renderHistoryItem(s) {
+  const li = document.createElement("div");
+  li.className = "session-history";
+  li.dataset.id = s.id;
+
+  const meta = document.createElement("div");
+  meta.className = "history-meta";
+  meta.innerHTML = `<span class="history-date">${formatDate(s.timestamp)}</span>`;
+  li.appendChild(meta);
+
+  if (s.name) {
+    const name = document.createElement("div");
+    name.className = "history-name";
+    name.textContent = s.name;
+    name.title = s.cwd;
+    li.appendChild(name);
+  }
+
+  const cwd = document.createElement("div");
+  cwd.className = "history-cwd";
+  cwd.textContent = s.cwd;
+  cwd.title = s.cwd;
+  li.appendChild(cwd);
+
+  const actions = document.createElement("div");
+  actions.className = "history-actions";
+
+  const resumeBtn = document.createElement("button");
+  resumeBtn.textContent = "▶";
+  resumeBtn.title = "Resume session";
+  resumeBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    closeSidebar();
+    await resumeSession(s.id);
+  });
+  actions.appendChild(resumeBtn);
+
+  const delBtn = document.createElement("button");
+  delBtn.textContent = "🗑";
+  delBtn.title = "Delete session";
+  delBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm("Delete this session permanently?")) return;
+    await api("DELETE", `/sessions/${s.id}`);
+    refreshHistory();
+  });
+  actions.appendChild(delBtn);
+
+  li.appendChild(actions);
+  return li;
 }
 
 /* ---------- Create instance ---------- */
 
 async function createInstance(cwd) {
   const { id } = await api("POST", "/instances", { cwd });
+  folderExpandedState.set(cwd, true);
   await attachInstance(id, cwd);
   refreshInstanceList();
   return id;
@@ -455,85 +651,9 @@ function updateVisibility() {
   }
 }
 
-/* ---------- Session history ---------- */
-
-async function refreshHistory() {
-  try {
-    const sessions = await api("GET", "/sessions");
-    renderHistory(sessions);
-  } catch (e) {
-    if (historyList) historyList.innerHTML = "<li class='history-empty'>Error loading</li>";
-  }
-}
-
-function formatDate(ts) {
-  if (!ts) return "";
-  const d = new Date(ts);
-  return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-function renderHistory(sessions) {
-  if (!historyList) return;
-  historyList.innerHTML = "";
-  if (sessions.length === 0) {
-    historyList.innerHTML = "<li class='history-empty'>No past sessions</li>";
-    return;
-  }
-  for (const s of sessions) {
-    const li = document.createElement("li");
-    li.className = "history-item";
-    li.dataset.id = s.id;
-
-    const meta = document.createElement("div");
-    meta.className = "history-meta";
-    meta.innerHTML = `<span class="history-date">${formatDate(s.timestamp)}</span>`;
-    li.appendChild(meta);
-
-    if (s.name) {
-      const name = document.createElement("div");
-      name.className = "history-name";
-      name.textContent = s.name;
-      name.title = s.cwd;
-      li.appendChild(name);
-    }
-
-    const cwd = document.createElement("div");
-    cwd.className = "history-cwd";
-    cwd.textContent = s.cwd;
-    cwd.title = s.cwd;
-    li.appendChild(cwd);
-
-    const actions = document.createElement("div");
-    actions.className = "history-actions";
-
-    const resumeBtn = document.createElement("button");
-    resumeBtn.textContent = "▶";
-    resumeBtn.title = "Resume session";
-    resumeBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      closeSidebar();
-      await resumeSession(s.id);
-    });
-    actions.appendChild(resumeBtn);
-
-    const delBtn = document.createElement("button");
-    delBtn.textContent = "🗑";
-    delBtn.title = "Delete session";
-    delBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (!confirm("Delete this session permanently?")) return;
-      await api("DELETE", `/sessions/${s.id}`);
-      refreshHistory();
-    });
-    actions.appendChild(delBtn);
-
-    li.appendChild(actions);
-    historyList.appendChild(li);
-  }
-}
-
 async function resumeSession(sessionId) {
   const { id, cwd } = await api("POST", `/sessions/${sessionId}/resume`);
+  folderExpandedState.set(cwd, true);
   await attachInstance(id, cwd);
   refreshInstanceList();
 }
