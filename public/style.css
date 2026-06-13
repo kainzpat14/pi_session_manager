@@ -608,6 +608,25 @@ html, body, #app {
   border-radius: 10px;
 }
 
+.folder-plus-btn {
+  font-size: 0.85rem;
+  color: #238636;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 2px;
+}
+
+.folder-plus-btn:hover {
+  background: #238636;
+  color: white;
+}
+
 .folder-content {
   padding-left: 18px;
   padding-bottom: 6px;

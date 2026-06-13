@@ -180,6 +180,16 @@ function renderSessionGroups() {
     badge.textContent = parts.join(", ");
     header.appendChild(badge);
 
+    const plusBtn = document.createElement("span");
+    plusBtn.className = "folder-plus-btn";
+    plusBtn.textContent = "+";
+    plusBtn.title = "New session here";
+    plusBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      createInstance(folder.cwd);
+    });
+    header.appendChild(plusBtn);
+
     header.addEventListener("click", () => {
       folderExpandedState.set(folder.cwd, !isExpanded);
       renderSessionGroups();
