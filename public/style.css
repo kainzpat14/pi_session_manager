@@ -43,17 +43,13 @@ html, body, #app {
 
 #paste-btn {
   display: none;
-  position: fixed;
-  top: 8px;
-  right: 8px;
-  z-index: 55;
   background: #1f6feb;
   border: none;
   color: white;
-  width: 44px;
-  height: 44px;
-  border-radius: 6px;
-  font-size: 1.2rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 0.9rem;
   cursor: pointer;
   align-items: center;
   justify-content: center;
@@ -62,6 +58,7 @@ html, body, #app {
   -webkit-tap-highlight-color: rgba(0,0,0,0.2);
   -webkit-user-select: none;
   user-select: none;
+  flex-shrink: 0;
 }
 
 #paste-btn:active {
