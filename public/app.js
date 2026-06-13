@@ -29,6 +29,7 @@ let fsCurrentPath = "/home/dev";
 
 /* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
+  return; // debug logging disabled
   if (!debugLog) return;
   debugLog.style.display = "block";
   const line = document.createElement("div");
