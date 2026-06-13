@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>pi Web</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css" />
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
   <div id="app">
@@ -46,6 +46,16 @@
     </main>
   </div>
 
+  <div id="kb-menu">
+    <div id="kb-buttons">
+      <button data-key="esc" aria-label="Escape">ESC</button>
+      <button data-key="up" aria-label="Up arrow">↑</button>
+      <button data-key="down" aria-label="Down arrow">↓</button>
+      <button data-key="enter" aria-label="Enter">↵</button>
+    </div>
+    <button id="kb-toggle" aria-label="Toggle keyboard menu">⌨</button>
+  </div>
+
   <div id="login-overlay">
     <div class="login-box">
       <h2>pi Web</h2>
@@ -56,6 +66,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>

@@ -799,6 +799,93 @@ html, body, #app {
   }
 }
 
+/* Mobile keyboard menu */
+#kb-menu {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 70;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+#kb-toggle {
+  background: #1f6feb;
+  border: none;
+  color: white;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.2);
+  -webkit-user-select: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+#kb-toggle:active {
+  background: #388bfd;
+  transform: scale(0.95);
+}
+
+#kb-toggle.active {
+  background: #238636;
+}
+
+#kb-buttons {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+
+#kb-buttons.open {
+  display: flex;
+}
+
+#kb-buttons button {
+  background: #30363d;
+  border: 1px solid #484f58;
+  color: #c9d1d9;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 64px;
+  min-height: 48px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.2);
+  -webkit-user-select: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#kb-buttons button:active {
+  background: #484f58;
+  transform: scale(0.95);
+}
+
+@media (max-width: 768px) {
+  #kb-menu {
+    display: flex;
+  }
+}
+
 /* Login overlay */
 #login-overlay {
   position: fixed;

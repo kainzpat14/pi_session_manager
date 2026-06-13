@@ -20,6 +20,8 @@ const newCwdBtn = document.getElementById("new-cwd-btn");
 const newCwdInput = document.getElementById("new-cwd-input");
 const pasteBtn = document.getElementById("paste-btn");
 const scrollLockBtn = document.getElementById("scroll-lock-btn");
+const kbToggle = document.getElementById("kb-toggle");
+const kbButtons = document.getElementById("kb-buttons");
 
 /* ---------- State ---------- */
 let token = localStorage.getItem("pi-web-token") || "";
@@ -870,9 +872,10 @@ if (pasteBtn) {
       if (!text) return;
       const entry = instances.get(selectedInstanceId);
       if (!entry) return;
-      const term = activeTab === "pi" ? entry.pi.term : entry.shell.term;
-      term.paste(text);
-      term.focus();
+      const target = activeTab === "pi" ? entry.pi : entry.shell;
+      if (target.ws.readyState === target.ws.OPEN) {
+        target.ws.send(JSON.stringify({ type: "input", data: text }));
+      }
     } catch (err) {
       console.error("Paste failed:", err);
     }
@@ -880,5 +883,47 @@ if (pasteBtn) {
   pasteBtn.addEventListener("touchstart", (e) => {
     e.preventDefault();
     pasteBtn.click();
+  }, { passive: false });
+}
+
+/* ---------- Mobile keyboard menu ---------- */
+
+if (kbToggle) {
+  kbToggle.addEventListener("click", () => {
+    kbButtons.classList.toggle("open");
+    kbToggle.classList.toggle("active", kbButtons.classList.contains("open"));
+  });
+  kbToggle.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    kbToggle.click();
+  }, { passive: false });
+}
+
+if (kbButtons) {
+  kbButtons.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-key]");
+    if (!btn) return;
+    const key = btn.dataset.key;
+    const entry = instances.get(selectedInstanceId);
+    if (!entry) return;
+    const target = activeTab === "pi" ? entry.pi : entry.shell;
+
+    let seq = "";
+    switch (key) {
+      case "esc": seq = "\x1b"; break;
+      case "up": seq = "\x1b[A"; break;
+      case "down": seq = "\x1b[B"; break;
+      case "enter": seq = "\r"; break;
+    }
+
+    if (seq && target.ws.readyState === target.ws.OPEN) {
+      target.ws.send(JSON.stringify({ type: "input", data: seq }));
+    }
+  });
+  kbButtons.addEventListener("touchstart", (e) => {
+    const btn = e.target.closest("[data-key]");
+    if (!btn) return;
+    e.preventDefault();
+    btn.click();
   }, { passive: false });
 }
