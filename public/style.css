@@ -449,10 +449,49 @@ html, body, #app {
 
 #tabs {
   display: flex;
+  align-items: center;
   background: #161b22;
   border-bottom: 1px solid #30363d;
   min-height: 36px;
   overflow-x: auto;
+  padding-right: 4px;
+}
+
+.tab-group {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+}
+
+#scroll-lock-btn {
+  margin-left: auto;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.2);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#scroll-lock-btn.active {
+  background: #1f6feb;
+  color: white;
+  border-color: #1f6feb;
+}
+
+#scroll-lock-btn:active {
+  transform: scale(0.95);
 }
 
 .pi-tab {

@@ -20,6 +20,7 @@ const newSessionBtn = document.getElementById("new-session-btn");
 const newCwdBtn = document.getElementById("new-cwd-btn");
 const newCwdInput = document.getElementById("new-cwd-input");
 const pasteBtn = document.getElementById("paste-btn");
+const scrollLockBtn = document.getElementById("scroll-lock-btn");
 
 /* ---------- State ---------- */
 let token = localStorage.getItem("pi-web-token") || "";
@@ -27,6 +28,7 @@ let selectedInstanceId = null;   // sidebar selection
 let activeTab = "pi";            // "pi" or "shell"
 const instances = new Map();     // id -> { cwd, pi: {...}, shell: {...} }
 let fsCurrentPath = "/home/dev";
+let scrollLockActive = true;
 
 /* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
@@ -180,7 +182,11 @@ async function attachInstance(id, cwd) {
           piTerm.write(msg.data, () => piTerm.scrollToBottom());
           entry.pi.firstData = false;
         } else {
-          piTerm.write(msg.data);
+          if (scrollLockActive) {
+            piTerm.write(msg.data, () => piTerm.scrollToBottom());
+          } else {
+            piTerm.write(msg.data);
+          }
         }
       } else if (msg.type === "exit") {
         piTerm.writeln(`\r\n\x1b[31m[pi exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
@@ -247,7 +253,11 @@ async function attachInstance(id, cwd) {
           shellTerm.write(msg.data, () => shellTerm.scrollToBottom());
           entry.shell.firstData = false;
         } else {
-          shellTerm.write(msg.data);
+          if (scrollLockActive) {
+            shellTerm.write(msg.data, () => shellTerm.scrollToBottom());
+          } else {
+            shellTerm.write(msg.data);
+          }
         }
       } else if (msg.type === "exit") {
         shellTerm.writeln(`\r\n\x1b[31m[shell exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
@@ -382,7 +392,12 @@ function addTerminalTab() {
     activeTab = "shell";
     updateVisibility();
   });
-  tabsEl.appendChild(tab);
+  const tabGroup = tabsEl.querySelector(".tab-group");
+  if (tabGroup) {
+    tabGroup.appendChild(tab);
+  } else {
+    tabsEl.appendChild(tab);
+  }
 }
 
 function removeTerminalTab() {
@@ -411,6 +426,7 @@ function updateVisibility() {
         entry.pi.ws.send(JSON.stringify({ type: "resize", cols, rows }));
       }
       entry.pi.term.focus();
+      if (scrollLockActive) entry.pi.term.scrollToBottom();
     }, 0);
   } else if (activeTab === "shell" && selectedInstanceId && instances.has(selectedInstanceId)) {
     const entry = instances.get(selectedInstanceId);
@@ -425,6 +441,7 @@ function updateVisibility() {
         entry.shell.ws.send(JSON.stringify({ type: "resize", cols, rows }));
       }
       entry.shell.term.focus();
+      if (scrollLockActive) entry.shell.term.scrollToBottom();
     }, 0);
   }
 
@@ -694,6 +711,26 @@ if (newCwdInput) {
   newCwdInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && newCwdBtn) newCwdBtn.click();
   });
+}
+
+if (scrollLockBtn) {
+  scrollLockBtn.addEventListener("click", () => {
+    scrollLockActive = !scrollLockActive;
+    scrollLockBtn.classList.toggle("active", scrollLockActive);
+    scrollLockBtn.textContent = scrollLockActive ? "🔒" : "🔓";
+    scrollLockBtn.title = scrollLockActive ? "Scroll lock (on)" : "Scroll lock (off)";
+    if (scrollLockActive) {
+      const entry = instances.get(selectedInstanceId);
+      if (entry) {
+        const term = activeTab === "pi" ? entry.pi.term : entry.shell.term;
+        term.scrollToBottom();
+      }
+    }
+  });
+  scrollLockBtn.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    scrollLockBtn.click();
+  }, { passive: false });
 }
 
 if (pasteBtn) {
