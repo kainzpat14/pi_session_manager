@@ -161,7 +161,7 @@ async function attachInstance(id, cwd) {
   piTerm.open(piPane);
   piTerm.reset();
 
-  entry.pi = { ws: piWs, term: piTerm, fitAddon: piFit, pane: piPane };
+  entry.pi = { ws: piWs, term: piTerm, fitAddon: piFit, pane: piPane, firstData: true };
 
   piWs.addEventListener("open", () => {
     if (piPane.classList.contains("active")) {
@@ -175,9 +175,12 @@ async function attachInstance(id, cwd) {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
-        piTerm.write(msg.data);
-      } else if (msg.type === "scrollToBottom") {
-        piTerm.scrollToBottom();
+        if (entry.pi.firstData) {
+          piTerm.write(msg.data, () => piTerm.scrollToBottom());
+          entry.pi.firstData = false;
+        } else {
+          piTerm.write(msg.data);
+        }
       } else if (msg.type === "exit") {
         piTerm.writeln(`\r\n\x1b[31m[pi exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
         removeInstance(id);
@@ -225,7 +228,7 @@ async function attachInstance(id, cwd) {
   shellTerm.open(shellPane);
   shellTerm.reset();
 
-  entry.shell = { ws: shellWs, term: shellTerm, fitAddon: shellFit, pane: shellPane };
+  entry.shell = { ws: shellWs, term: shellTerm, fitAddon: shellFit, pane: shellPane, firstData: true };
 
   shellWs.addEventListener("open", () => {
     if (shellPane.classList.contains("active")) {
@@ -239,9 +242,12 @@ async function attachInstance(id, cwd) {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
-        shellTerm.write(msg.data);
-      } else if (msg.type === "scrollToBottom") {
-        shellTerm.scrollToBottom();
+        if (entry.shell.firstData) {
+          shellTerm.write(msg.data, () => shellTerm.scrollToBottom());
+          entry.shell.firstData = false;
+        } else {
+          shellTerm.write(msg.data);
+        }
       } else if (msg.type === "exit") {
         shellTerm.writeln(`\r\n\x1b[31m[shell exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
         removeInstance(id);
