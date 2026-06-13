@@ -22,7 +22,7 @@
 
 | Module | Role |
 |--------|------|
-| `server.ts` | HTTP server + WebSocket upgrade. Serves static files and routes API. Replays buffer + SIGWINCH on new WS connection |
+| `server.ts` | HTTPS server + WebSocket upgrade. Serves static files with no-cache headers and routes API. Replays buffer + SIGWINCH on new WS connection |
 | `pty-manager.ts` | Spawns pi in PTY, tracks instances with replay buffer, routes I/O to WS clients. Exposes pids for /proc scanning |
 | `session-api.ts` | Express router: list/kill/resize instances; list/resume/delete session history |
 | `session-store.ts` | Scans `~/.pi/agent/sessions/` for `.jsonl` files, reads headers, filters externally active sessions via `/proc` |
@@ -33,7 +33,7 @@
 | File | Role |
 |------|------|
 | `index.html` | Layout: sidebar, tabs, terminal panes, login overlay |
-| `app.js` | All frontend logic: auth, API, WS, xterm.js, tabs, mobile sidebar, history, iOS visibilitychange re-render |
+| `app.js` | All frontend logic: auth, API, WS, xterm.js, tabs, mobile sidebar, history, iOS re-render, paste button, window resize auto-fit |
 | `style.css` | Dark theme, responsive mobile sidebar, terminal panes |
 
 ## Data Flow
@@ -51,7 +51,7 @@
 2. User clicks sidebar item
 3. `instances.has(id)` is false → `attachInstance(id)` re-establishes WS
 4. Frontend calls `term.reset()` to clear stale xterm.js parser state
-5. Server sends replay buffer on WS open. **For reconnects** (>5s old), it prepends terminal init sequences (`smcup`, application cursor keys, wraparound) that pi sent at startup but have fallen out of the 64KB window
+5. Server sends replay buffer on WS open so the new client sees the current screen state
 6. Server sends SIGWINCH to pi → TUI redraws → fresh output
 7. PTY was never killed → stream resumes
 
@@ -122,21 +122,14 @@ Each `PiInstance` maintains a rolling `replayBuffer` (64KB cap):
 - On new WebSocket connection, send buffer immediately before live streaming
 - This provides instant screen state without waiting for new pi output
 
-### Reconnect Init Sequence
+### Reconnect State Recovery
 
-The replay buffer window only captures the most recent 64KB of output. When pi first starts, it sends terminal setup sequences (`smcup`, application cursor keys, wraparound, etc.) that configure the TTY. These sequences are long gone from the replay window.
-
-For reconnects (instances older than 5 seconds), the server **prepends** the critical missing setup sequences to the replay buffer before sending:
-- `\x1b[?1049h` — enter alternate screen (smcup)
-- `\x1b[?1h` — enable application cursor keys
-- `\x1b[?7h` — enable wraparound
-
-Combined with `term.reset()` on the frontend, this ensures xterm.js starts in a clean state that matches what pi's TUI expects.
+The replay buffer captures the most recent 64KB of output. On a fresh WebSocket connection the server sends the entire replay buffer immediately, followed by a SIGWINCH to force pi to redraw its TUI. The frontend calls `term.reset()` before attaching, which clears any stale xterm.js parser state. Together, the replay buffer + `term.reset()` + SIGWINCH provide a clean, up-to-date screen state without needing to prepend historical init sequences.
 
 ## SIGWINCH Redraw
 
 On new WebSocket connect to an existing PTY:
-1. Server sends replay buffer (existing screen state, with init sequence prepended for reconnects)
+1. Server sends replay buffer (existing screen state)
 2. Server calls `process.kill(pid, "SIGWINCH")`
 3. pi's `ProcessTerminal` receives SIGWINCH and triggers full TUI redraw
 4. Redraw output is captured in replay buffer and streamed to the new client
@@ -153,10 +146,11 @@ When iOS Safari backgrounds a tab, the canvas may blank. On `visibilitychange` �
 
 ### Overview
 
-Replace the current "one tab per instance" model with:
-- **One static "pi" tab** that renders the currently selected pi session's TUI
-- **One "Terminal" tab per active instance** that renders a plain bash shell in the session's working directory
+The tab bar contains:
+- **One static "pi" tab** that always renders the currently selected pi session's TUI
+- **One shared "Terminal" tab** that renders the bash shell of the currently selected instance
 - Sessions are listed only in the sidebar; tabs are not used for session switching
+- Each backend instance still owns a 1:1 pi PTY + shell PTY pair, but the frontend exposes only a single shell tab that switches panes based on `selectedInstanceId`
 
 ### Backend Changes
 
@@ -194,8 +188,8 @@ interface PiInstance {
 - Read `?target=pi|shell` query parameter (default `"pi"` for backward compatibility).
 - `attachWebSocket(instanceId, ws, target)`.
 - On connect: send the appropriate replay buffer (`replayBuffer` for pi, `shellReplayBuffer` for shell).
-- For pi reconnects (>5s old): prepend init sequence (`\x1b[?1049h\x1b[?1h\x1b[?7h`) to replay buffer.
-- For shell: no init sequence needed.
+- For pi: send SIGWINCH after replay to force a TUI redraw.
+- For shell: no SIGWINCH needed.
 - On `msg.type === "input"` or `"resize"`: route to the correct PTY via `target`.
 - SIGWINCH sent only for pi target.
 
@@ -212,22 +206,22 @@ interface PiInstance {
 // Sidebar selection: which instance's pi TUI is shown in the "pi" tab
 let selectedInstanceId = null;
 
-// Active tab: "pi" or "shell-<instanceId>"
+// Active tab: "pi" or "shell"
 let activeTab = "pi";
 
 // Instance registry: each entry has both pi and shell subsystems
 const instances = new Map(); // id -> {
 //   cwd: string,
-//   pi: { ws, term, fitAddon, pane },
-//   shell: { ws, term, fitAddon, pane }
+//   pi: { ws, term, fitAddon, pane, firstData: boolean },
+//   shell: { ws, term, fitAddon, pane, firstData: boolean }
 // }
 ```
 
 #### Tab Bar
 
 - **Static "pi" tab**: Always first, no close button. Clicking it sets `activeTab = "pi"`.
-- **Dynamic "Terminal" tabs**: One per active instance, added when `attachInstance()` is called. Label is exactly `"Terminal"`. No close button (lifecycle is coupled to the pi session). Clicking a Terminal tab sets `activeTab = "shell-<id>"`.
-- **Tab removal**: When `removeInstance(id)` is called, the Terminal tab for that id is removed.
+- **Shared "Terminal" tab**: A single tab added when the first instance is attached. Label is exactly `"Terminal"`. No close button. Clicking it sets `activeTab = "shell"`. The shell pane of the currently `selectedInstanceId` is shown.
+- **Tab removal**: When the last instance is removed, the Terminal tab is also removed.
 
 #### Pane Visibility
 
@@ -236,7 +230,7 @@ The `#terminals` container holds both pi panes and shell panes. All are `positio
 `updateVisibility()`:
 1. Hide all panes (both pi and shell).
 2. If `activeTab === "pi"` and `selectedInstanceId` exists and `instances.has(selectedInstanceId)`: show `instances.get(selectedInstanceId).pi.pane`.
-3. If `activeTab` starts with `"shell-"`: extract id, show `instances.get(id).shell.pane`.
+3. If `activeTab === "shell"` and `selectedInstanceId` exists and `instances.has(selectedInstanceId)`: show `instances.get(selectedInstanceId).shell.pane`.
 4. Call `fitAddon.fit()` and `term.focus()` on the newly visible terminal.
 
 #### Sidebar Interaction
@@ -255,7 +249,7 @@ The `#terminals` container holds both pi panes and shell panes. All are `positio
 2. Create **pi** subsystem: WS with `?target=pi`, xterm.js, fitAddon, `.terminal-pane` appended to `#terminals`.
 3. Create **shell** subsystem: WS with `?target=shell`, xterm.js, fitAddon, `.shell-pane` appended to `#terminals`.
 4. Both WS handlers call `term.reset()` on open, handle `data`/`exit`/`close` messages, and send `input`/`resize` from xterm.js.
-5. Add a "Terminal" tab for this instance.
+5. Ensure the shared "Terminal" tab exists (adds it if this is the first instance).
 6. Register in `instances` Map.
 7. Set `selectedInstanceId = id` and `activeTab = "pi"`.
 8. Call `updateVisibility()`.
@@ -265,10 +259,10 @@ The `#terminals` container holds both pi panes and shell panes. All are `positio
 1. Close both WS connections.
 2. Dispose both xterm.js terminals.
 3. Remove both DOM panes.
-4. Remove the Terminal tab.
+4. Remove the Terminal tab if no instances remain.
 5. Delete from `instances` Map.
 6. If `selectedInstanceId === id`, set `selectedInstanceId` to the next remaining instance (or null).
-7. If `activeTab === "shell-<id>"`, fall back to `"pi"`.
+7. If `activeTab === "shell"`, fall back to `"pi"`.
 8. Call `updateVisibility()`.
 
 #### iOS Re-render
@@ -311,9 +305,9 @@ User clicks sidebar instance X
   └── shows X's pi pane
   │
   ↓
-User clicks "Terminal" tab for instance Y
-  ├── activeTab = "shell-Y"
-  └── shows Y's shell pane
+User clicks "Terminal" tab
+  ├── activeTab = "shell"
+  └── shows shell pane of the currently selected instance
   │
   ↓
 User clicks sidebar × for instance X
@@ -326,8 +320,8 @@ User clicks sidebar × for instance X
 ### Reconnect Flow
 
 Both pi and shell support reconnect via their own replay buffers:
-- **Pi WS**: Server sends `replayBuffer` (with init sequence prepended for old instances). SIGWINCH sent.
-- **Shell WS**: Server sends `shellReplayBuffer`. No init sequence. No SIGWINCH.
+- **Pi WS**: Server sends `replayBuffer`. SIGWINCH sent to force redraw.
+- **Shell WS**: Server sends `shellReplayBuffer`. No SIGWINCH.
 - Frontend `term.reset()` on open for both.
 
 ### Error Handling
@@ -372,6 +366,15 @@ Sidebar "New in folder"
 - `fsCurrentPath` tracks state; synced to manual input field
 - Null-safe: all DOM refs checked before access
 - Click handlers on directories call `loadFs()` recursively
+
+## Minor Frontend Features
+
+- **Paste button** — Fixed `#paste-btn` (📋) reads from `navigator.clipboard` and pastes into the active terminal (pi or shell). Shown only on mobile (`<768px`).
+- **Window resize auto-fit** — On `window.resize`, all visible terminals are re-fitted via `fitAddon.fit()`.
+- **First-data scroll-to-bottom** — The frontend tracks `firstData` for both pi and shell terminals and explicitly calls `scrollToBottom()` on the first WebSocket data chunk so the cursor starts at the bottom.
+- **Cache-busting query params** — `style.css` and `app.js` are loaded with `?v=N` cache-busting query strings in `index.html`.
+- **Debug log overlay** — A hidden `#debug-log` overlay exists in the DOM for development; it is currently disabled in code.
+- **Static `Cache-Control` headers** — Express static middleware adds `no-store, no-cache, must-revalidate, proxy-revalidate, Pragma, Expires` headers.
 
 ## Error Handling
 - PTY exit → broadcast to WS clients, clean up instance

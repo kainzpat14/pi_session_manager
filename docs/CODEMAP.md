@@ -9,14 +9,14 @@ pi-web/
 ├── README.md              # quick start and usage
 ├── .gitignore             # node_modules, dist, logs
 ├── src/                   # TypeScript backend
-│   ├── server.ts          # entry point: Express + WebSocketServer + replay on connect. For reconnects, prepends terminal init sequences (smcup, app cursor, wraparound) to replay buffer before sending
+│   ├── server.ts          # entry point: HTTPS + Express + WebSocketServer. Replays buffer on connect; sends SIGWINCH for pi target.
 │   ├── pty-manager.ts     # PiInstance lifecycle: spawn, kill, attach, resize, replay buffer, SIGWINCH
 │   ├── session-api.ts     # Express router for /api/* endpoints
 │   ├── session-store.ts   # Scan sessions/, read headers, filter external pi processes via /proc
 │   └── config.ts          # JSON config persistence (token, port, agentDir)
 ├── public/                # Static frontend files
-│   ├── index.html         # Layout: sidebar, tabs, terminals, login
-│   ├── app.js             # All frontend logic: auth, API, WS, xterm.js, tabs, mobile sidebar, history, iOS re-render
+│   ├── index.html         # Layout: sidebar, tabs, terminals, login, paste button. Cache-busting query params on CSS/JS.
+│   ├── app.js             # All frontend logic: auth, API, WS, xterm.js, tabs, mobile sidebar, history, iOS re-render, paste button, window resize auto-fit
 │   └── style.css          # Dark theme, responsive sidebar, terminal panes
 ├── docs/                  # Documentation
 │   ├── REQUIREMENTS.md    # Functional & non-functional requirements
@@ -37,8 +37,9 @@ pi-web/
 | `redrawInstance(id)` | `pty-manager.ts` | Send SIGWINCH to pi process to force TUI redraw |
 | `getActiveSessionPaths()` | `pty-manager.ts` | Return `sessionPath` values of active instances |
 | `getAllPids()` | `pty-manager.ts` | Return pids of all pi-web managed pi processes |
-| `attachWebSocket(id, ws)` | `pty-manager.ts` | Subscribe WS to PTY output (buffer auto-replayed by server) |
-| `listInstances()` | `pty-manager.ts` | Return active {id, cwd, pid, createdAt} |
+| `getAllShellPids()` | `pty-manager.ts` | Return pids of all shell PTYs (currently unused) |
+| `attachWebSocket(id, ws, target)` | `pty-manager.ts` | Subscribe WS to PTY output (buffer auto-replayed by server) |
+| `listInstances()` | `pty-manager.ts` | Return active {id, cwd, pid, shellPid, createdAt, name?} |
 | `listSessions(excludePaths?, piWebPids?)` | `session-store.ts` | Scan disk, parse headers, filter externally active sessions |
 | `getExternallyActiveSessionDirs(piWebPids)` | `session-store.ts` | Scan `/proc/<pid>/cwd` for external pi processes |
 | `deleteSession(id)` | `session-store.ts` | Unlink `.jsonl` file |
@@ -54,14 +55,16 @@ pi-web/
 | `createInstance(cwd)` | `app.js` | POST /instances then attachInstance |
 | `attachInstance(id, cwd)` | `app.js` | Create WS, xterm.js, pane, tab, call `term.reset()`; server auto-replays + SIGWINCH |
 | `removeInstance(id)` | `app.js` | Dispose term, close WS, remove pane/tab |
-| `switchToInstance(id)` | `app.js` | Toggle active pane + tab + sidebar highlight |
 | `resumeSession(id)` | `app.js` | POST /sessions/:id/resume then attach |
 | `refreshHistory()` | `app.js` | GET /sessions, render history list |
 | `openSidebar()` / `closeSidebar()` | `app.js` | Mobile sidebar toggle |
 | `loadFs(path)` | `app.js` | Fetch directory listing and render explorer |
 | `renderFs(data)` | `app.js` | Build DOM: breadcrumb, create button, dir/file entries |
 | `toggleSidebar()` | `app.js` | Inline onclick + event listener for hamburger menu |
-| `term.reset()` | `app.js` | Called in `attachInstance()` before `fitAddon.fit()` to clear stale xterm.js parser state on reconnect |
+| `addTerminalTab()` | `app.js` | Add the single shared "Terminal" tab (idempotent) |
+| `removeTerminalTab()` | `app.js` | Remove the shared "Terminal" tab when no instances remain |
+| `updateVisibility()` | `app.js` | Show/hide pi or shell pane based on `activeTab` and `selectedInstanceId`, then fit + focus |
+| `term.reset()` | `app.js` | Called in `attachInstance()` to clear stale xterm.js parser state on reconnect |
 
 ## Data Structures
 
@@ -97,25 +100,27 @@ instances: Map<string, {
     term: Terminal;
     fitAddon: FitAddon;
     pane: HTMLDivElement;
+    firstData: boolean;
   };
   shell: {
     ws: WebSocket;
     term: Terminal;
     fitAddon: FitAddon;
     pane: HTMLDivElement;
+    firstData: boolean;
   };
 }>
 
 // Frontend state
 selectedInstanceId: string | null;  // sidebar selection
-activeTab: string;                   // "pi" or "shell-<id>"
+activeTab: "pi" | "shell";         // shared tab model
 ```
 
 ## API Endpoints
 
 | Method | Path | Auth | Body | Response |
 |--------|------|------|------|----------|
-| GET | `/api/instances` | token | — | `[{id, cwd, pid, createdAt}]` |
+| GET | `/api/instances` | token | — | `[{id, cwd, pid, shellPid, createdAt, name?}]` |
 | POST | `/api/instances` | token | `{cwd}` | `{id, cwd, pid}` |
 | POST | `/api/instances/:id/kill` | token | — | `{ok}` |
 | POST | `/api/instances/:id/resize` | token | `{cols, rows}` | `{ok}` |
@@ -124,7 +129,7 @@ activeTab: string;                   // "pi" or "shell-<id>"
 | DELETE | `/api/sessions/:id` | token | — | `{ok}` |
 | POST | `/api/sessions/:id/resume` | token | — | `{id, cwd, pid}` |
 | GET | `/api/fs` | token | `?path=<absPath>` | `{path, parent, entries[]}` |
-| GET | `/config-info` | — | — | `{port, agentDir, configPath}` |
+| GET | `/config-info` | — | — | `{port, agentDir, configPath}` (unauthenticated, token never exposed) |
 | WS | `/ws?instance=<id>&token=<t>` | token query | — | bidirectional JSON |
 
 ## WebSocket Protocol

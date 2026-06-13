@@ -2,6 +2,8 @@
 
 A web frontend for [pi](https://github.com/earendil-works/pi-coding-agent) that brings full session management to the browser — while keeping every native pi feature intact.
 
+> **Note:** This project was almost entirely AI-generated as a testbed for the pi coding agent. Bugs and rough edges are expected.
+
 ## Why
 
 pi is a powerful AI coding assistant with a rich TUI. This project lets you run pi from any browser or phone, without losing a single feature. You get the full TUI via xterm.js, plus session history, tabs, and a mobile-friendly interface.
@@ -25,7 +27,7 @@ npm run build
 npm start
 ```
 
-The server prints a token on first startup. Open `http://localhost:3456`, enter the token, and you're in. The token is stored in `~/.pi/agent/web-config.json`.
+The server prints a token on first startup. Open `https://localhost:3456`, enter the token, and you're in. (The server uses a self-signed certificate; accept the browser warning.) The token is stored in `~/.pi/agent/web-config.json`.
 
 ## Usage
 
@@ -41,7 +43,7 @@ The server prints a token on first startup. Open `http://localhost:3456`, enter 
 
 ```
 Browser ←──WS──→ node-pty (pi + shell)   one pair per session
-        ←──HTTP──→ Express API            list / kill / resize / resume
+        ←──HTTPS──→ Express API           list / kill / resize / resume
 ```
 
 Each session is a dual-PTY instance:

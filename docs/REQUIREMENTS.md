@@ -20,21 +20,21 @@ pi-web is a web frontend for the pi AI coding assistant. It renders the native T
 - [x] Multiple concurrent pi instances (tabs)
 
 ### Session Tab Model
-- [ ] The main tab area contains exactly one **"pi"** tab that renders the currently selected pi session's TUI
-- [ ] Sessions are visible only in the sidebar, not as separate tabs
-- [ ] Each active pi session has its own **"Terminal"** tab (1:1 relationship)
-- [ ] Terminal tab contains a plain bash shell running in the pi session's working directory
-- [ ] Terminal is spawned automatically when the pi session is created
-- [ ] Terminal tab shares the same lifecycle as the pi session: when the pi session ends, the terminal is also killed/closed
-- [ ] Terminal tab is named **"Terminal"**
-- [ ] Resumed sessions also get a terminal tab automatically
+- [x] The main tab area contains exactly one **"pi"** tab that renders the currently selected pi session's TUI
+- [x] Sessions are visible only in the sidebar, not as separate tabs
+- [x] One shared **"Terminal"** tab shows the bash shell of the currently selected instance
+- [x] Each active pi session has its own shell PTY (1:1 backend relationship)
+- [x] Shell is spawned automatically when the pi session is created
+- [x] Shell shares the same lifecycle as the pi session: when the pi session ends, the shell is also killed/closed
+- [x] Terminal tab is named **"Terminal"**
+- [x] Resumed sessions also get a shell automatically
 
 ### Reconnect / Resume
 - [x] Server maintains 64KB replay buffer per PTY instance
 - [x] New WebSocket connection replays recent output immediately
 - [x] Server sends SIGWINCH to pi on connect to force TUI redraw
-- [x] For reconnects, server prepends terminal init sequence to replay buffer (smcup, app cursor, wraparound) so xterm.js state matches pi's TUI expectations
 - [x] Frontend calls `term.reset()` before attaching to clear stale xterm.js parser state
+- [x] Replayed buffer + `term.reset()` + SIGWINCH provides a clean TUI state on reconnect
 - [x] iOS Safari: aggressive xterm.js re-render on visibilitychange (resize ±1 col, fit, refresh)
 
 ### Session Management
