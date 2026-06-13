@@ -19,6 +19,7 @@ const piTab = document.getElementById("pi-tab");
 const newSessionBtn = document.getElementById("new-session-btn");
 const newCwdBtn = document.getElementById("new-cwd-btn");
 const newCwdInput = document.getElementById("new-cwd-input");
+const pasteBtn = document.getElementById("paste-btn");
 
 /* ---------- State ---------- */
 let token = localStorage.getItem("pi-web-token") || "";
@@ -672,4 +673,24 @@ if (newCwdInput) {
   newCwdInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && newCwdBtn) newCwdBtn.click();
   });
+}
+
+if (pasteBtn) {
+  pasteBtn.addEventListener("click", async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text) return;
+      const entry = instances.get(selectedInstanceId);
+      if (!entry) return;
+      const term = activeTab === "pi" ? entry.pi.term : entry.shell.term;
+      term.paste(text);
+      term.focus();
+    } catch (err) {
+      console.error("Paste failed:", err);
+    }
+  });
+  pasteBtn.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    pasteBtn.click();
+  }, { passive: false });
 }

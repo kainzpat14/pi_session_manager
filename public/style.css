@@ -41,6 +41,34 @@ html, body, #app {
   transform: scale(0.95);
 }
 
+#paste-btn {
+  display: none;
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 55;
+  background: #1f6feb;
+  border: none;
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.2);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#paste-btn:active {
+  background: #388bfd;
+  transform: scale(0.95);
+}
+
 #sidebar-overlay {
   display: none;
   position: fixed;
@@ -63,6 +91,10 @@ html, body, #app {
 /* Mobile sidebar */
 @media (max-width: 768px) {
   #menu-toggle {
+    display: flex;
+  }
+
+  #paste-btn {
     display: flex;
   }
 
