@@ -64,6 +64,11 @@ wss.on("connection", (ws, req) => {
   const buffer = target === "pi" ? instance.replayBuffer : instance.shellReplayBuffer;
   if (buffer) {
     ws.send(JSON.stringify({ type: "data", instanceId: instanceId, data: buffer }));
+    // Scroll to bottom so the client shows the current prompt rather than the
+    // top of the scrollback buffer.
+    setTimeout(() => {
+      ws.send(JSON.stringify({ type: "scrollToBottom", instanceId: instanceId }));
+    }, 50);
   }
 
   // Nudge pi to redraw its TUI (SIGWINCH may be lost during suspend)

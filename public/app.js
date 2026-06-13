@@ -176,6 +176,8 @@ async function attachInstance(id, cwd) {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
         piTerm.write(msg.data);
+      } else if (msg.type === "scrollToBottom") {
+        piTerm.scrollToBottom();
       } else if (msg.type === "exit") {
         piTerm.writeln(`\r\n\x1b[31m[pi exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
         removeInstance(id);
@@ -238,6 +240,8 @@ async function attachInstance(id, cwd) {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
         shellTerm.write(msg.data);
+      } else if (msg.type === "scrollToBottom") {
+        shellTerm.scrollToBottom();
       } else if (msg.type === "exit") {
         shellTerm.writeln(`\r\n\x1b[31m[shell exited${msg.exitCode !== undefined ? " with code " + msg.exitCode : ""}]\x1b[0m`);
         removeInstance(id);
