@@ -23,12 +23,13 @@ const newCwdInput = document.getElementById("new-cwd-input");
 /* ---------- State ---------- */
 let token = localStorage.getItem("pi-web-token") || "";
 let selectedInstanceId = null;   // sidebar selection
-let activeTab = "pi";            // "pi" or "shell-<id>"
+let activeTab = "pi";            // "pi" or "shell"
 const instances = new Map();     // id -> { cwd, pi: {...}, shell: {...} }
 let fsCurrentPath = "/home/dev";
 
 /* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
+  return; // debug logging disabled
   if (!debugLog) return;
   debugLog.style.display = "block";
   const line = document.createElement("div");
@@ -159,13 +160,13 @@ async function attachInstance(id, cwd) {
   document.getElementById("terminals").appendChild(piPane);
   piTerm.open(piPane);
   piTerm.reset();
-  piFit.fit();
 
   entry.pi = { ws: piWs, term: piTerm, fitAddon: piFit, pane: piPane };
 
   piWs.addEventListener("open", () => {
-    piFit.fit();
-    piTerm.focus();
+    if (piPane.classList.contains("active")) {
+      piTerm.focus();
+    }
   });
 
   piWs.addEventListener("message", (event) => {
@@ -218,12 +219,13 @@ async function attachInstance(id, cwd) {
   document.getElementById("terminals").appendChild(shellPane);
   shellTerm.open(shellPane);
   shellTerm.reset();
-  shellFit.fit();
 
   entry.shell = { ws: shellWs, term: shellTerm, fitAddon: shellFit, pane: shellPane };
 
   shellWs.addEventListener("open", () => {
-    shellFit.fit();
+    if (shellPane.classList.contains("active")) {
+      shellTerm.focus();
+    }
   });
 
   shellWs.addEventListener("message", (event) => {
@@ -261,19 +263,26 @@ async function attachInstance(id, cwd) {
 
   instances.set(id, entry);
 
-  // Add Terminal tab
-  addTerminalTab(id);
+  // Ensure shared Terminal tab exists
+  addTerminalTab();
 
   selectedInstanceId = id;
   activeTab = "pi";
   updateVisibility();
 
-  window.addEventListener("resize", () => {
-    for (const [_, v] of instances) {
-      v.pi.fitAddon.fit();
-      v.shell.fitAddon.fit();
-    }
-  });
+  if (!window._piWebResizeListener) {
+    window._piWebResizeListener = true;
+    window.addEventListener("resize", () => {
+      for (const [_, v] of instances) {
+        if (v.pi.pane.classList.contains("active")) {
+          v.pi.fitAddon.fit();
+        }
+        if (v.shell.pane.classList.contains("active")) {
+          v.shell.fitAddon.fit();
+        }
+      }
+    });
+  }
 
   // iOS Safari may blank the canvas on background/return
   document.addEventListener("visibilitychange", () => {
@@ -290,7 +299,7 @@ async function attachInstance(id, cwd) {
           t.resize(cols, rows);
           f.fit();
           t.refresh(0, rows - 1);
-        } else if (activeTab.startsWith("shell-")) {
+        } else if (activeTab === "shell") {
           const t = entry.shell.term;
           const f = entry.shell.fitAddon;
           const cols = t.cols;
@@ -315,36 +324,41 @@ function removeInstance(id) {
   entry.pi.pane.remove();
   entry.shell.pane.remove();
   instances.delete(id);
-  removeTerminalTab(id);
 
   if (selectedInstanceId === id) {
     const remaining = Array.from(instances.keys());
     selectedInstanceId = remaining.length > 0 ? remaining[0] : null;
   }
-  if (activeTab === "shell-" + id) {
+  if (activeTab === "shell") {
     activeTab = "pi";
+  }
+  if (instances.size === 0) {
+    removeTerminalTab();
   }
   updateVisibility();
 }
 
 /* ---------- Tabs ---------- */
 
-function addTerminalTab(id) {
+function addTerminalTab() {
   if (!tabsEl) return;
-  if (document.querySelector(`.tab[data-shell-id="${id}"]`)) return;
+  // Remove any stale per-instance tabs from old code
+  for (const old of document.querySelectorAll('.tab[data-shell-id]')) {
+    old.remove();
+  }
+  if (document.querySelector(".tab.shell-tab")) return;
   const tab = document.createElement("div");
-  tab.className = "tab";
-  tab.dataset.shellId = id;
+  tab.className = "tab shell-tab";
   tab.textContent = "Terminal";
   tab.addEventListener("click", () => {
-    activeTab = "shell-" + id;
+    activeTab = "shell";
     updateVisibility();
   });
   tabsEl.appendChild(tab);
 }
 
-function removeTerminalTab(id) {
-  const tab = document.querySelector(`.tab[data-shell-id="${id}"]`);
+function removeTerminalTab() {
+  const tab = document.querySelector(".tab.shell-tab");
   if (tab) tab.remove();
 }
 
@@ -363,25 +377,22 @@ function updateVisibility() {
       entry.pi.fitAddon.fit();
       entry.pi.term.focus();
     }, 0);
-  } else if (activeTab.startsWith("shell-")) {
-    const id = activeTab.slice(6);
-    if (instances.has(id)) {
-      const entry = instances.get(id);
-      entry.shell.pane.classList.add("active");
-      setTimeout(() => {
-        entry.shell.fitAddon.fit();
-        entry.shell.term.focus();
-      }, 0);
-    }
+  } else if (activeTab === "shell" && selectedInstanceId && instances.has(selectedInstanceId)) {
+    const entry = instances.get(selectedInstanceId);
+    entry.shell.pane.classList.add("active");
+    setTimeout(() => {
+      entry.shell.fitAddon.fit();
+      entry.shell.term.focus();
+    }, 0);
   }
 
   // Update tab styling
   if (piTab) {
     piTab.classList.toggle("active", activeTab === "pi");
   }
-  for (const tab of document.querySelectorAll(".tab")) {
-    const tabId = tab.dataset.shellId;
-    tab.classList.toggle("active", tabId && activeTab === "shell-" + tabId);
+  const shellTab = document.querySelector(".tab.shell-tab");
+  if (shellTab) {
+    shellTab.classList.toggle("active", activeTab === "shell");
   }
 }
 
