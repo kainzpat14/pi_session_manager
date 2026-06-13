@@ -290,7 +290,7 @@ async function attachInstance(id, cwd) {
       const entry = instances.get(selectedInstanceId);
       if (!entry) return;
       setTimeout(() => {
-        if (activeTab === "pi") {
+        if (activeTab === "pi" && entry.pi.pane.classList.contains("active")) {
           const t = entry.pi.term;
           const f = entry.pi.fitAddon;
           const cols = t.cols;
@@ -299,7 +299,7 @@ async function attachInstance(id, cwd) {
           t.resize(cols, rows);
           f.fit();
           t.refresh(0, rows - 1);
-        } else if (activeTab === "shell") {
+        } else if (activeTab === "shell" && entry.shell.pane.classList.contains("active")) {
           const t = entry.shell.term;
           const f = entry.shell.fitAddon;
           const cols = t.cols;
@@ -374,6 +374,7 @@ function updateVisibility() {
     const entry = instances.get(selectedInstanceId);
     entry.pi.pane.classList.add("active");
     setTimeout(() => {
+      if (!entry.pi.pane.classList.contains("active")) return;
       entry.pi.fitAddon.fit();
       entry.pi.term.focus();
     }, 0);
@@ -381,6 +382,7 @@ function updateVisibility() {
     const entry = instances.get(selectedInstanceId);
     entry.shell.pane.classList.add("active");
     setTimeout(() => {
+      if (!entry.shell.pane.classList.contains("active")) return;
       entry.shell.fitAddon.fit();
       entry.shell.term.focus();
     }, 0);
