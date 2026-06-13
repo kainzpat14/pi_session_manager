@@ -29,7 +29,6 @@ let fsCurrentPath = "/home/dev";
 
 /* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
-  return; // debug logging disabled
   if (!debugLog) return;
   debugLog.style.display = "block";
   const line = document.createElement("div");
@@ -167,6 +166,8 @@ async function attachInstance(id, cwd) {
     if (piPane.classList.contains("active")) {
       piTerm.focus();
     }
+    const { cols, rows } = piTerm;
+    piWs.send(JSON.stringify({ type: "resize", cols, rows }));
   });
 
   piWs.addEventListener("message", (event) => {
@@ -197,6 +198,7 @@ async function attachInstance(id, cwd) {
   });
 
   piTerm.onResize(({ cols, rows }) => {
+    logDebug(`[pi resize id=${id}] ${cols}x${rows}`);
     if (piWs.readyState === piWs.OPEN) {
       piWs.send(JSON.stringify({ type: "resize", cols, rows }));
     }
@@ -226,6 +228,8 @@ async function attachInstance(id, cwd) {
     if (shellPane.classList.contains("active")) {
       shellTerm.focus();
     }
+    const { cols, rows } = shellTerm;
+    shellWs.send(JSON.stringify({ type: "resize", cols, rows }));
   });
 
   shellWs.addEventListener("message", (event) => {
@@ -256,6 +260,7 @@ async function attachInstance(id, cwd) {
   });
 
   shellTerm.onResize(({ cols, rows }) => {
+    logDebug(`[shell resize id=${id}] ${cols}x${rows}`);
     if (shellWs.readyState === shellWs.OPEN) {
       shellWs.send(JSON.stringify({ type: "resize", cols, rows }));
     }
@@ -273,11 +278,16 @@ async function attachInstance(id, cwd) {
   if (!window._piWebResizeListener) {
     window._piWebResizeListener = true;
     window.addEventListener("resize", () => {
+      logDebug("[window resize]");
       for (const [_, v] of instances) {
         if (v.pi.pane.classList.contains("active")) {
+          const dims = v.pi.fitAddon.proposeDimensions();
+          logDebug(`[window.resize pi fit] ${dims ? dims.cols + 'x' + dims.rows : 'no dims'}`);
           v.pi.fitAddon.fit();
         }
         if (v.shell.pane.classList.contains("active")) {
+          const dims = v.shell.fitAddon.proposeDimensions();
+          logDebug(`[window.resize shell fit] ${dims ? dims.cols + 'x' + dims.rows : 'no dims'}`);
           v.shell.fitAddon.fit();
         }
       }
@@ -298,6 +308,9 @@ async function attachInstance(id, cwd) {
           t.resize(cols - 1, rows);
           t.resize(cols, rows);
           f.fit();
+          if (entry.pi.ws.readyState === entry.pi.ws.OPEN) {
+            entry.pi.ws.send(JSON.stringify({ type: "resize", cols: t.cols, rows: t.rows }));
+          }
           t.refresh(0, rows - 1);
         } else if (activeTab === "shell" && entry.shell.pane.classList.contains("active")) {
           const t = entry.shell.term;
@@ -307,6 +320,9 @@ async function attachInstance(id, cwd) {
           t.resize(cols - 1, rows);
           t.resize(cols, rows);
           f.fit();
+          if (entry.shell.ws.readyState === entry.shell.ws.OPEN) {
+            entry.shell.ws.send(JSON.stringify({ type: "resize", cols: t.cols, rows: t.rows }));
+          }
           t.refresh(0, rows - 1);
         }
       }, 100);
@@ -375,7 +391,13 @@ function updateVisibility() {
     entry.pi.pane.classList.add("active");
     setTimeout(() => {
       if (!entry.pi.pane.classList.contains("active")) return;
+      const dims = entry.pi.fitAddon.proposeDimensions();
+      logDebug(`[updateVisibility pi fit id=${selectedInstanceId}] ${dims ? dims.cols + 'x' + dims.rows : 'no dims'}`);
       entry.pi.fitAddon.fit();
+      const { cols, rows } = entry.pi.term;
+      if (entry.pi.ws.readyState === entry.pi.ws.OPEN) {
+        entry.pi.ws.send(JSON.stringify({ type: "resize", cols, rows }));
+      }
       entry.pi.term.focus();
     }, 0);
   } else if (activeTab === "shell" && selectedInstanceId && instances.has(selectedInstanceId)) {
@@ -383,7 +405,13 @@ function updateVisibility() {
     entry.shell.pane.classList.add("active");
     setTimeout(() => {
       if (!entry.shell.pane.classList.contains("active")) return;
+      const dims = entry.shell.fitAddon.proposeDimensions();
+      logDebug(`[updateVisibility shell fit id=${selectedInstanceId}] ${dims ? dims.cols + 'x' + dims.rows : 'no dims'}`);
       entry.shell.fitAddon.fit();
+      const { cols, rows } = entry.shell.term;
+      if (entry.shell.ws.readyState === entry.shell.ws.OPEN) {
+        entry.shell.ws.send(JSON.stringify({ type: "resize", cols, rows }));
+      }
       entry.shell.term.focus();
     }, 0);
   }
