@@ -365,7 +365,9 @@ async function attachInstance(id, cwd) {
     allowProposedApi: true,
   });
   const piFit = new FitAddon.FitAddon();
+  const piWebLinks = new WebLinksAddon.WebLinksAddon();
   piTerm.loadAddon(piFit);
+  piTerm.loadAddon(piWebLinks);
   const piPane = document.createElement("div");
   piPane.className = "terminal-pane";
   document.getElementById("terminals").appendChild(piPane);
@@ -436,7 +438,9 @@ async function attachInstance(id, cwd) {
     allowProposedApi: true,
   });
   const shellFit = new FitAddon.FitAddon();
+  const shellWebLinks = new WebLinksAddon.WebLinksAddon();
   shellTerm.loadAddon(shellFit);
+  shellTerm.loadAddon(shellWebLinks);
   const shellPane = document.createElement("div");
   shellPane.className = "shell-pane";
   document.getElementById("terminals").appendChild(shellPane);
