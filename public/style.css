@@ -41,31 +41,6 @@ html, body, #app {
   transform: scale(0.95);
 }
 
-#paste-btn {
-  display: none;
-  background: #1f6feb;
-  border: none;
-  color: white;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgba(0,0,0,0.2);
-  -webkit-user-select: none;
-  user-select: none;
-  flex-shrink: 0;
-}
-
-#paste-btn:active {
-  background: #388bfd;
-  transform: scale(0.95);
-}
-
 #sidebar-overlay {
   display: none;
   position: fixed;
@@ -88,10 +63,6 @@ html, body, #app {
 /* Mobile sidebar */
 @media (max-width: 768px) {
   #menu-toggle {
-    display: flex;
-  }
-
-  #paste-btn {
     display: flex;
   }
 
@@ -880,8 +851,61 @@ html, body, #app {
   transform: scale(0.95);
 }
 
+#kb-buttons button[data-key="paste"] {
+  background: #1f6feb;
+  border-color: #1f6feb;
+}
+
+#kb-buttons button[data-key="paste"]:active {
+  background: #388bfd;
+  border-color: #388bfd;
+}
+
+#scroll-drag-btn {
+  display: none;
+  position: fixed;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 70;
+  width: 44px;
+  height: 72px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  background: #21262d;
+  border: 1px solid #30363d;
+  border-radius: 22px;
+  color: #c9d1d9;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  cursor: ns-resize;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: rgba(0,0,0,0.2);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#scroll-drag-btn:active,
+#scroll-drag-btn.dragging {
+  background: #30363d;
+  border-color: #484f58;
+}
+
+#scroll-drag-btn .scroll-drag-arrow {
+  font-size: 0.65rem;
+  line-height: 1;
+  color: #8b949e;
+  pointer-events: none;
+}
+
 @media (max-width: 768px) {
   #kb-menu {
+    display: flex;
+  }
+
+  #scroll-drag-btn {
     display: flex;
   }
 }

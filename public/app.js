@@ -18,10 +18,10 @@ const piTab = document.getElementById("pi-tab");
 const newSessionBtn = document.getElementById("new-session-btn");
 const newCwdBtn = document.getElementById("new-cwd-btn");
 const newCwdInput = document.getElementById("new-cwd-input");
-const pasteBtn = document.getElementById("paste-btn");
 const scrollLockBtn = document.getElementById("scroll-lock-btn");
 const kbToggle = document.getElementById("kb-toggle");
 const kbButtons = document.getElementById("kb-buttons");
+const scrollDragBtn = document.getElementById("scroll-drag-btn");
 
 /* ---------- State ---------- */
 let token = localStorage.getItem("pi-web-token") || "";
@@ -34,6 +34,32 @@ let fsCurrentPath = "/home/dev";
 let scrollLockActive = true;
 let folderExpandedState = new Map(); // cwd -> boolean
 let folderShowAllHistory = new Map(); // cwd -> boolean
+
+/* ---------- Terminal hyperlink injection (OSC 8) ---------- */
+const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/g;
+const OSC8_START = "\x1b]8;;";
+const OSC8_ST = "\x1b\\";
+const OSC8_CLOSE = "\x1b]8;;\x1b\\";
+
+function hyperlinkify(data) {
+  return data.replace(URL_REGEX, (url) => `${OSC8_START}${url}${OSC8_ST}${url}${OSC8_CLOSE}`);
+}
+
+const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+const linkHandler = {
+  activate(event, uri) {
+    if ((isMac ? event.metaKey : event.ctrlKey)) {
+      window.open(uri, "_blank", "noopener,noreferrer");
+    }
+  },
+  hover(event) {
+    event.target.style.cursor = "pointer";
+  },
+  leave(event) {
+    event.target.style.cursor = "";
+  },
+  allowNonHttpProtocols: false,
+};
 
 /* ---------- Visible debug logger ---------- */
 function logDebug(msg) {
@@ -363,9 +389,10 @@ async function attachInstance(id, cwd) {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     cursorBlink: true,
     allowProposedApi: true,
+    linkHandler,
   });
   const piFit = new FitAddon.FitAddon();
-  const piWebLinks = new WebLinksAddon.WebLinksAddon();
+  const piWebLinks = new WebLinksAddon.WebLinksAddon(linkHandler.activate, linkHandler);
   piTerm.loadAddon(piFit);
   piTerm.loadAddon(piWebLinks);
   const piPane = document.createElement("div");
@@ -388,14 +415,15 @@ async function attachInstance(id, cwd) {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
+        const data = hyperlinkify(msg.data);
         if (entry.pi.firstData) {
-          piTerm.write(msg.data, () => piTerm.scrollToBottom());
+          piTerm.write(data, () => piTerm.scrollToBottom());
           entry.pi.firstData = false;
         } else {
           if (scrollLockActive) {
-            piTerm.write(msg.data, () => piTerm.scrollToBottom());
+            piTerm.write(data, () => piTerm.scrollToBottom());
           } else {
-            piTerm.write(msg.data);
+            piTerm.write(data);
           }
         }
       } else if (msg.type === "exit") {
@@ -436,9 +464,10 @@ async function attachInstance(id, cwd) {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     cursorBlink: true,
     allowProposedApi: true,
+    linkHandler,
   });
   const shellFit = new FitAddon.FitAddon();
-  const shellWebLinks = new WebLinksAddon.WebLinksAddon();
+  const shellWebLinks = new WebLinksAddon.WebLinksAddon(linkHandler.activate, linkHandler);
   shellTerm.loadAddon(shellFit);
   shellTerm.loadAddon(shellWebLinks);
   const shellPane = document.createElement("div");
@@ -461,14 +490,15 @@ async function attachInstance(id, cwd) {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "data") {
+        const data = hyperlinkify(msg.data);
         if (entry.shell.firstData) {
-          shellTerm.write(msg.data, () => shellTerm.scrollToBottom());
+          shellTerm.write(data, () => shellTerm.scrollToBottom());
           entry.shell.firstData = false;
         } else {
           if (scrollLockActive) {
-            shellTerm.write(msg.data, () => shellTerm.scrollToBottom());
+            shellTerm.write(data, () => shellTerm.scrollToBottom());
           } else {
-            shellTerm.write(msg.data);
+            shellTerm.write(data);
           }
         }
       } else if (msg.type === "exit") {
@@ -869,27 +899,6 @@ if (scrollLockBtn) {
   }, { passive: false });
 }
 
-if (pasteBtn) {
-  pasteBtn.addEventListener("click", async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text) return;
-      const entry = instances.get(selectedInstanceId);
-      if (!entry) return;
-      const target = activeTab === "pi" ? entry.pi : entry.shell;
-      if (target.ws.readyState === target.ws.OPEN) {
-        target.ws.send(JSON.stringify({ type: "input", data: text }));
-      }
-    } catch (err) {
-      console.error("Paste failed:", err);
-    }
-  });
-  pasteBtn.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    pasteBtn.click();
-  }, { passive: false });
-}
-
 /* ---------- Mobile keyboard menu ---------- */
 
 if (kbToggle) {
@@ -904,10 +913,27 @@ if (kbToggle) {
 }
 
 if (kbButtons) {
-  kbButtons.addEventListener("click", (e) => {
+  kbButtons.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-key]");
     if (!btn) return;
     const key = btn.dataset.key;
+
+    if (key === "paste") {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text) return;
+        const entry = instances.get(selectedInstanceId);
+        if (!entry) return;
+        const target = activeTab === "pi" ? entry.pi : entry.shell;
+        if (target.ws.readyState === target.ws.OPEN) {
+          target.ws.send(JSON.stringify({ type: "input", data: text }));
+        }
+      } catch (err) {
+        console.error("Paste failed:", err);
+      }
+      return;
+    }
+
     const entry = instances.get(selectedInstanceId);
     if (!entry) return;
     const target = activeTab === "pi" ? entry.pi : entry.shell;
@@ -929,5 +955,92 @@ if (kbButtons) {
     if (!btn) return;
     e.preventDefault();
     btn.click();
+  }, { passive: false });
+}
+
+/* ---------- Mobile scroll-drag button ---------- */
+
+if (scrollDragBtn) {
+  let isDragging = false;
+  let accumulatedDelta = 0;
+  const SCROLL_SENSITIVITY = 12; // pixels per terminal line
+
+  function getActiveTerm() {
+    const entry = instances.get(selectedInstanceId);
+    if (!entry) return null;
+    return activeTab === "pi" ? entry.pi.term : entry.shell.term;
+  }
+
+  function handleDragMove(clientY) {
+    if (!isDragging) return;
+    const delta = clientY - scrollDragBtn._lastY;
+    scrollDragBtn._lastY = clientY;
+    accumulatedDelta += delta;
+
+    const lines = Math.round(accumulatedDelta / SCROLL_SENSITIVITY);
+    if (lines !== 0) {
+      const term = getActiveTerm();
+      if (term) {
+        term.scrollLines(lines);
+      }
+      accumulatedDelta -= lines * SCROLL_SENSITIVITY;
+    }
+  }
+
+  function endDrag() {
+    if (!isDragging) return;
+    isDragging = false;
+    accumulatedDelta = 0;
+    scrollDragBtn.classList.remove("dragging");
+    delete scrollDragBtn._lastY;
+    document.removeEventListener("mousemove", scrollDragBtn._onMouseMove);
+    document.removeEventListener("mouseup", scrollDragBtn._onMouseUp);
+    document.removeEventListener("touchmove", scrollDragBtn._onTouchMove);
+    document.removeEventListener("touchend", scrollDragBtn._onTouchEnd);
+    document.removeEventListener("touchcancel", scrollDragBtn._onTouchEnd);
+  }
+
+  scrollDragBtn._onMouseMove = (e) => handleDragMove(e.clientY);
+  scrollDragBtn._onMouseUp = () => endDrag();
+  scrollDragBtn._onTouchMove = (e) => {
+    if (e.touches.length > 0) {
+      handleDragMove(e.touches[0].clientY);
+    }
+  };
+  scrollDragBtn._onTouchEnd = () => endDrag();
+
+  scrollDragBtn.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    if (scrollLockActive) {
+      // Temporarily disable scroll lock so manual scrolling is not fighting incoming data
+      scrollLockActive = false;
+      scrollLockBtn.classList.remove("active");
+      scrollLockBtn.textContent = "🔓";
+      scrollLockBtn.title = "Scroll lock (off)";
+    }
+    isDragging = true;
+    accumulatedDelta = 0;
+    scrollDragBtn._lastY = e.clientY;
+    scrollDragBtn.classList.add("dragging");
+    document.addEventListener("mousemove", scrollDragBtn._onMouseMove);
+    document.addEventListener("mouseup", scrollDragBtn._onMouseUp);
+  });
+
+  scrollDragBtn.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    if (e.touches.length === 0) return;
+    if (scrollLockActive) {
+      scrollLockActive = false;
+      scrollLockBtn.classList.remove("active");
+      scrollLockBtn.textContent = "🔓";
+      scrollLockBtn.title = "Scroll lock (off)";
+    }
+    isDragging = true;
+    accumulatedDelta = 0;
+    scrollDragBtn._lastY = e.touches[0].clientY;
+    scrollDragBtn.classList.add("dragging");
+    document.addEventListener("touchmove", scrollDragBtn._onTouchMove, { passive: false });
+    document.addEventListener("touchend", scrollDragBtn._onTouchEnd);
+    document.addEventListener("touchcancel", scrollDragBtn._onTouchEnd);
   }, { passive: false });
 }

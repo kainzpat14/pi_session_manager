@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>pi Web</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css" />
-  <link rel="stylesheet" href="style.css?v=16" />
+  <link rel="stylesheet" href="style.css?v=17" />
 </head>
 <body>
   <div id="app">
@@ -40,7 +40,6 @@
           <div class="pi-tab active" id="pi-tab" data-tab="pi">pi</div>
         </div>
         <button id="scroll-lock-btn" class="active" aria-label="Toggle scroll lock" title="Scroll lock (on)">🔒</button>
-        <button id="paste-btn" aria-label="Paste from clipboard" title="Paste from clipboard">📋</button>
       </div>
       <div id="terminals"></div>
     </main>
@@ -52,9 +51,15 @@
       <button data-key="up" aria-label="Up arrow">↑</button>
       <button data-key="down" aria-label="Down arrow">↓</button>
       <button data-key="enter" aria-label="Enter">↵</button>
+      <button data-key="paste" aria-label="Paste from clipboard" title="Paste from clipboard">📋</button>
     </div>
     <button id="kb-toggle" aria-label="Toggle keyboard menu">⌨</button>
   </div>
+
+  <button id="scroll-drag-btn" aria-label="Drag up or down to scroll" title="Drag up or down to scroll">
+    <span class="scroll-drag-arrow">▲</span>
+    <span class="scroll-drag-arrow">▼</span>
+  </button>
 
   <div id="login-overlay">
     <div class="login-box">
@@ -67,6 +72,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-web-links@0.11.0/lib/addon-web-links.min.js"></script>
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=31"></script>
 </body>
 </html>

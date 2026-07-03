@@ -283,17 +283,28 @@ test.describe('pi-web e2e', () => {
   test('paste button is hidden on desktop', async ({ page }) => {
     await login(page);
     await page.setViewportSize({ width: 1280, height: 720 });
-    const pasteBtn = page.locator('#paste-btn');
-    // On desktop (>768px) the paste button is hidden via CSS
-    const isVisible = await pasteBtn.isVisible();
-    expect(isVisible).toBe(false);
+    // The mobile keyboard menu (which contains the paste button) is hidden on desktop
+    await expect(page.locator('#kb-menu')).toBeHidden();
+    const pasteBtn = page.locator('#kb-buttons [data-key="paste"]');
+    await expect(pasteBtn).toBeHidden();
   });
 
-  test('paste button is visible on mobile', async ({ page }) => {
+  test('paste button is visible on mobile when keyboard menu is open', async ({ page }) => {
     await login(page);
     await page.setViewportSize({ width: 375, height: 667 });
-    const pasteBtn = page.locator('#paste-btn');
+    const pasteBtn = page.locator('#kb-buttons [data-key="paste"]');
+    // Paste button is inside the collapsible keyboard menu
+    await expect(pasteBtn).toBeHidden();
+    await page.click('#kb-toggle');
     await expect(pasteBtn).toBeVisible();
     await page.setViewportSize({ width: 1280, height: 720 });
+  });
+
+  test('scroll drag button is visible on mobile and hidden on desktop', async ({ page }) => {
+    await login(page);
+    await page.setViewportSize({ width: 375, height: 667 });
+    await expect(page.locator('#scroll-drag-btn')).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(page.locator('#scroll-drag-btn')).toBeHidden();
   });
 });
